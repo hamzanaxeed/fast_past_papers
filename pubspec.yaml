@@ -1,0 +1,41 @@
+name: fast_past_papers
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  firebase_auth: ^5.6.0
+  firebase_core: ^3.14.0
+  google_sign_in: ^6.3.0
+  firebase_ui_oauth_google: ^1.4.2
+  image_picker: ^1.1.2
+  supabase_flutter: ^2.9.1
+  shared_preferences: ^2.5.3
+  file_picker: ^10.2.0
+  flutter_pdfview: ^1.4.1+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: ^0.13.1
+
+  flutter_lints: ^6.0.0
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons.png" # <-- Replace with your image path
+
+flutter:
+
+  uses-material-design: true
+
+  assets:
+    - assets/logo.jpg
