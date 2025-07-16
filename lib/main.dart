@@ -20,16 +20,95 @@ void main() async {
   );
 
   final prefs = await SharedPreferences.getInstance();
-  final isFirstTime = prefs.getBool('introSeen') ?? false;
-
-  if (!isFirstTime) {
-    await prefs.setBool('introSeen', true);
-  }
+  final hasSeenIntro = prefs.getBool('hasSeenIntro') ?? false;
 
   runApp(
     MaterialApp(
-      home: isFirstTime ? const MyApp() : const into_Screen(),
+      home: hasSeenIntro ? const MyApp() : const into_Screen(),
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF7FAF9),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1976D2),
+          iconTheme: IconThemeData(color: Colors.white),
+          elevation: 0,
+          titleTextStyle: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.1,
+          ),
+          toolbarTextStyle: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            letterSpacing: 1,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1976D2),
+            foregroundColor: Colors.white,
+            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            elevation: 4,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(18)),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF1976D2),
+            side: const BorderSide(color: Color(0xFF1976D2), width: 1.5),
+            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(18)),
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+          ),
+        ),
+        cardTheme: const CardThemeData(
+          color: Colors.white,
+          elevation: 10,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(22)),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          labelStyle: const TextStyle(color: Colors.black87),
+        ),
+        snackBarTheme: const SnackBarThemeData(
+          backgroundColor: Color(0xFF1976D2),
+          contentTextStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+          behavior: SnackBarBehavior.floating,
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFF1976D2)),
+        textSelectionTheme: const TextSelectionThemeData(
+          cursorColor: Color(0xFF1976D2),
+          selectionColor: Color(0xFF90CAF9),
+          selectionHandleColor: Color(0xFF1976D2),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF1976D2),
+          foregroundColor: Colors.white,
+        ),
+        progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: Color(0xFF1976D2),
+        ),
+      ),
     ),
   );
 }
@@ -60,7 +139,8 @@ class _MyAppState extends State<MyApp> {
           elevation: 0,
           titleTextStyle: TextStyle(
             color: Colors.white,
-            fontSize: 22,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
             letterSpacing: 1.1,
           ),
           toolbarTextStyle: TextStyle(
@@ -74,35 +154,37 @@ class _MyAppState extends State<MyApp> {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF1976D2),
             foregroundColor: Colors.white,
-            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
             elevation: 4,
             shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(16)),
+              borderRadius: BorderRadius.all(Radius.circular(18)),
             ),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: const Color(0xFF1976D2),
             side: const BorderSide(color: Color(0xFF1976D2), width: 1.5),
-            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
             shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(16)),
+              borderRadius: BorderRadius.all(Radius.circular(18)),
             ),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
           ),
         ),
         cardTheme: const CardThemeData(
           color: Colors.white,
           elevation: 10,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(28)),
+            borderRadius: BorderRadius.all(Radius.circular(22)),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             borderSide: BorderSide.none,
           ),
           labelStyle: const TextStyle(color: Colors.black87),
@@ -136,6 +218,7 @@ class _MyAppState extends State<MyApp> {
               logUserEvent('App Opened');
               return const WelcomeScreen();
             } else {
+              // Only show intro button on login page
               return Stack(
                 children: [
                   const EmailAuthScreen(),

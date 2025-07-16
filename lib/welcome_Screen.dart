@@ -65,6 +65,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   List<_SearchResult> _globalSearchResults = [];
   bool _globalSearchLoading = false;
 
+  // Cached files/folders for global search
+  late Future<List<_SearchResult>> _cachedFilesFuture;
+
+  // Synchronous cache for all files/folders for search
+  List<_SearchResult> _allFilesCache = [];
+
   // Always fetch editor emails before checking roles
   Future<void> fetchEditorEmails() async {
     try {
@@ -114,6 +120,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     super.initState();
     fetchEditorEmails().then((_) {
       _loadFolder('');
+    });
+    // Populate the synchronous cache at app start
+    _cachedFilesFuture = _fetchAllFilesAndFolders('', 0, 4, 2000);
+    _cachedFilesFuture.then((list) {
+      setState(() {
+        _allFilesCache = list;
+      });
     });
     // Listen for real-time changes in Editors table
     _editorSub = Supabase.instance.client
@@ -513,60 +526,79 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return acc;
   }
 
-  // Add this method for the search bar
+  // Improved card decoration for modern look
+  BoxDecoration _cardDecoration({Color? color}) => BoxDecoration(
+        color: color ?? Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.blue.withOpacity(0.08), width: 1),
+      );
+
+  // Improved search bar using synchronous cache for instant search
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search files or folders...',
-          prefixIcon: const Icon(Icons.search),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.85),
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
-            borderSide: BorderSide.none,
-          ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.blue.withOpacity(0.07),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        onChanged: (value) async {
-          final query = value.trim().toLowerCase();
-          setState(() {
-            searchQuery = query;
-            _globalSearchLoading = query.isNotEmpty;
-            _globalSearchResults = [];
-          });
-          if (query.isNotEmpty) {
-            // Use optimized fetch with limits
-            final all = await _fetchAllFilesAndFolders('', 0, 4, 2000);
+        child: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: '🔍 Search files or folders...',
+            prefixIcon: const Icon(Icons.search, color: Color(0xFF1976D2)),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(18),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          style: const TextStyle(fontSize: 16),
+          onChanged: (value) {
+            final query = value.trim().toLowerCase();
             setState(() {
-              _globalSearchResults = all.where((f) =>
+              searchQuery = query;
+              _globalSearchLoading = query.isNotEmpty;
+            });
+
+            if (query.isNotEmpty) {
+              final result = _allFilesCache.where((f) =>
                 f.file.name.toLowerCase().contains(query)
               ).toList();
-              _globalSearchLoading = false;
-            });
-          }
-        },
+
+              setState(() {
+                _globalSearchResults = result;
+                _globalSearchLoading = false;
+              });
+            } else {
+              setState(() {
+                _globalSearchResults = [];
+                _globalSearchLoading = false;
+              });
+            }
+          },
+        ),
       ),
     );
   }
 
-
-  // Restore the old card decoration (white cards)
-  BoxDecoration _cardDecoration({Color? color}) => BoxDecoration(
-        color: color ?? Colors.white.withOpacity(0.97),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.withOpacity(0.10),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-        border: Border.all(color: Colors.blue.withOpacity(0.10), width: 1.2),
-      );
-
+  // Improved list view with more spacing and hover effect
   Widget _buildList() {
     if (_globalSearchLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -578,40 +610,81 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       final folders = _globalSearchResults.where((r) => _isFolder(r.file)).toList();
       final files = _globalSearchResults.where((r) => !_isFolder(r.file)).toList();
       return ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         children: [
-          ...folders.map((r) => Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            decoration: _cardDecoration(color: Colors.teal.withOpacity(0.09)),
-            child: ListTile(
-              leading: const Icon(Icons.folder, color: Colors.amber, size: 36),
-              title: Text(
-                r.file.name.replaceAll('/', '').replaceAll('_folder', ''),
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87, letterSpacing: 0.2),
-              ),
-              subtitle: Text(
-                r.fullPath.replaceAll('_folder', ''),
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
-              ),
-              onTap: () {
-                _loadFolder(r.fullPath);
-              },
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              hoverColor: Colors.amber.withOpacity(0.10),
-              trailing: const Icon(Icons.arrow_forward_ios, color: Colors.teal, size: 20),
-            ),
+          ...folders.map((r) => FutureBuilder<int>(
+            future: _getFolderItemCount(r.fullPath),
+            builder: (context, countSnapshot) {
+              final count = countSnapshot.data;
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                decoration: _cardDecoration(color: Colors.teal.withOpacity(0.10)),
+                child: ListTile(
+                  leading: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.all(6),
+                    child: const Icon(Icons.folder, color: Colors.amber, size: 32),
+                  ),
+                  title: Text(
+                    r.file.name.replaceAll('/', '').replaceAll('_folder', ''),
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87, letterSpacing: 0.2),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (count == null)
+                        const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      else
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          child: Text(
+                            '$count',
+                            style: const TextStyle(
+                              color: Color(0xFF1976D2),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  selected: _selectedItems.contains(r.file),
+                  onTap: () => _onTapItem(r.file),
+                  onLongPress: () => _onLongPressItem(r.file),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  hoverColor: Colors.amber.withOpacity(0.13),
+                ),
+              );
+            },
           )),
           ...files.map((r) => Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
+            margin: const EdgeInsets.symmetric(vertical: 10),
             decoration: _cardDecoration(),
             child: ListTile(
-              leading: _isImage(r.file.name)
-                  ? const Icon(Icons.image, color: Colors.blue, size: 32)
-                  : _isPdf(r.file.name)
-                      ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 32)
-                      : const Icon(Icons.insert_drive_file,
-                          color: Colors.grey, size: 32),
+              leading: Container(
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(6),
+                child: _isImage(r.file.name)
+                    ? const Icon(Icons.image, color: Colors.blue, size: 28)
+                    : _isPdf(r.file.name)
+                        ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
+                        : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
+              ),
               title: Text(
                 r.file.name,
                 style: const TextStyle(
@@ -621,32 +694,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 r.fullPath.replaceAll('_folder', ''),
                 style: const TextStyle(fontSize: 13, color: Colors.black54),
               ),
-              onTap: () {
-                final url = Supabase.instance.client.storage
-                    .from('pastpapers')
-                    .getPublicUrl(r.fullPath);
-                if (_isImage(r.file.name)) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ImageViewer(url: url, name: r.file.name),
-                    ),
-                  );
-                } else if (_isPdf(r.file.name)) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PdfViewerScreen(url: url, name: r.file.name),
-                    ),
-                  );
-                }
-              },
+              selected: _selectedItems.contains(r.file),
+              onTap: () => _onTapItem(r.file),
+              onLongPress: () => _onLongPressItem(r.file),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              hoverColor: Colors.teal.withOpacity(0.07),
+              hoverColor: Colors.blue.withOpacity(0.07),
               trailing: IconButton(
-                icon: const Icon(Icons.download_rounded, color: Colors.teal, size: 28),
+                icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
                 tooltip: 'Download',
-                onPressed: () => _downloadFile(r.fullPath, r.file.name),
+                onPressed: () {
+                  _downloadFile(r.fullPath, r.file.name);
+                },
               ),
             ),
           )),
@@ -684,7 +742,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         : files.where((f) => f.name.toLowerCase().contains(searchQuery)).toList();
 
     return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       children: [
         ...filteredFolders.map((f) => FutureBuilder<bool>(
           future: isAdmin,
@@ -698,10 +756,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 // --- Check if this is a second-level folder (folder/subfolder) ---
                 final isSecondLevel = currentPath.split('/').where((e) => e.isNotEmpty).length == 1;
                 return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: _cardDecoration(color: Colors.teal.withOpacity(0.09)),
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: _cardDecoration(color: Colors.teal.withOpacity(0.10)),
                   child: ListTile(
-                    leading: const Icon(Icons.folder, color: Colors.amber, size: 36),
+                    leading: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.all(6),
+                      child: const Icon(Icons.folder, color: Colors.amber, size: 32),
+                    ),
                     title: Text(
                       f.name.replaceAll('/', '').replaceAll('_folder', ''),
                       style: TextStyle(
@@ -720,12 +785,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         else
-                          Text(
-                            '$count',
-                            style: const TextStyle(
-                              color: Colors.white, // Number white
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            child: Text(
+                              '$count',
+                              style: const TextStyle(
+                                color: Color(0xFF1976D2),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
                         // --- Upload Here button removed ---
@@ -753,15 +825,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         )),
         // --- FIX: Remove FutureBuilder for files, use direct mapping ---
         ...filteredFiles.map((f) => Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
+          margin: const EdgeInsets.symmetric(vertical: 10),
           decoration: _cardDecoration(),
           child: ListTile(
-            leading: _isImage(f.name)
-                ? const Icon(Icons.image, color: Colors.blue, size: 32)
-                : _isPdf(f.name)
-                    ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 32)
-                    : const Icon(Icons.insert_drive_file,
-                        color: Colors.grey, size: 32),
+            leading: Container(
+              decoration: BoxDecoration(
+                color: Colors.blue.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(6),
+              child: _isImage(f.name)
+                  ? const Icon(Icons.image, color: Colors.blue, size: 28)
+                  : _isPdf(f.name)
+                      ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
+                      : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
+            ),
             title: Text(
               f.name,
               style: const TextStyle(
@@ -777,9 +855,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             onTap: () => _onTapItem(f),
             onLongPress: () => _onLongPressItem(f),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            hoverColor: Colors.teal.withOpacity(0.07),
+            hoverColor: Colors.blue.withOpacity(0.07),
             trailing: IconButton(
-              icon: const Icon(Icons.download_rounded, color: Colors.teal, size: 28),
+              icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
               tooltip: 'Download',
               onPressed: () {
                 final filePath = currentPath.isEmpty ? f.name : '$currentPath/${f.name}';
@@ -1354,7 +1432,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   final admin = adminSnapshot.data ?? false;
                   return Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1976D2),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                       borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
                       boxShadow: [
                         BoxShadow(color: Colors.blue.withOpacity(0.10), blurRadius: 16, offset: Offset(0, 4))
@@ -1367,13 +1449,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           children: [
                             if (_selectionMode && admin)
                               IconButton(
-                                icon: const Icon(Icons.close, color: Colors.white, size: 28), // Changed to white
+                                icon: const Icon(Icons.close, color: Colors.white, size: 28),
                                 onPressed: _clearSelection,
                             ),
                             if (!_selectionMode && currentPath.isNotEmpty)
                               IconButton(
-                                icon: const Icon(Icons.arrow_back,
-                                    color: Colors.white, size: 28), // Changed to white
+                                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
                                 onPressed: () {
                                   var path = currentPath.endsWith('/')
                                       ? currentPath.substring(0, currentPath.length - 1)
@@ -1381,7 +1462,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                   final parts = path.split('/');
                                   if (parts.isNotEmpty) parts.removeLast();
                                   final parentPath =
-                                  parts.isEmpty ? '' : parts.join('/') + '/';
+                                      parts.isEmpty ? '' : parts.join('/') + '/';
                                   _loadFolder(parentPath);
                                 },
                             ),
@@ -1392,7 +1473,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                     ? '${_selectedItems.length} selected'
                                     : displayPath,
                                 style: const TextStyle(
-                                  color: Colors.white, // AppBar text color white
+                                  color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 24,
                                   letterSpacing: 1.1,
@@ -1402,78 +1483,136 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                             ),
                             if (_selectionMode && admin)
                               IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.white, size: 28), // Changed to white
+                                icon: const Icon(Icons.delete, color: Colors.white, size: 28),
                                 tooltip: 'Delete Selected',
                                 onPressed: _selectedItems.isEmpty ? null : _deleteSelectedItems,
                             ),
                             if (!_selectionMode) ...[
-                              // --- Editor management button for admin ---
-                              FutureBuilder<bool>(
-                                future: isAdmin,
-                                builder: (context, adminSnapshot) {
-                                  final admin = adminSnapshot.data ?? false;
-                                  if (!admin) return const SizedBox.shrink();
-                                  return Row(
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.manage_accounts,
-                                            color: Colors.white, size: 28), // Changed to white
-                                        tooltip: "Manage Editors",
-                                        onPressed: () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) => const EditorHandlingScreen(),
-                                            ),
-                                          );
-                                        },
+                              // --- REMOVE: Direct Feedback and Logout buttons ---
+                              // if (!admin) ...[
+                              //   IconButton(
+                              //     icon: const Icon(Icons.feedback_outlined,
+                              //         color: Colors.white, size: 28),
+                              //     onPressed: () async {
+                              //       // ...existing code...
+                              //     },
+                              //   ),
+                              //   IconButton(
+                              //     icon: const Icon(Icons.logout,
+                              //         color: Colors.white, size: 28),
+                              //     onPressed: () => _logout(context),
+                              //   ),
+                              // ],
+                              // --- Popup menu for everyone ---
+                              PopupMenuButton<String>(
+                                icon: const Icon(Icons.more_vert, color: Colors.white),
+                                color: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                onSelected: (value) async {
+                                  if (value == 'editors') {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const EditorHandlingScreen(),
                                       ),
-                                      // --- View Logs button for admin ---
-                                      IconButton(
-                                        icon: const Icon(Icons.list_alt,
-                                            color: Colors.white, size: 28), // Changed to white
-                                        tooltip: "View Logs",
-                                        onPressed: () {
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (_) => const ViewLogsScreen(),
-                                            ),
-                                          );
-                                        },
+                                    );
+                                  } else if (value == 'logs') {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const ViewLogsScreen(),
                                       ),
-                                    ],
-                                  );
-                                },
-                              ),
-                              // --- Feedback button ---
-                              IconButton(
-                                icon: const Icon(Icons.feedback_outlined,
-                                    color: Colors.white, size: 28), // Changed to white
-                                onPressed: () async {
-                                  final user = FirebaseAuth.instance.currentUser;
-                                  if (user == null || user.isAnonymous) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('You must be signed in to do this action'),
-                                          backgroundColor: Colors.red,
-                                          behavior: SnackBarBehavior.floating,
-                                        ),
-                                      );
+                                    );
+                                  } else if (value == 'make_folder') {
+                                    await _showCreateFolderDialog();
+                                  } else if (value == 'upload') {
+                                    await _uploadFile();
+                                  } else if (value == 'feedback') {
+                                    final user = FirebaseAuth.instance.currentUser;
+                                    if (user == null || user.isAnonymous) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('You must be signed in to do this action'),
+                                            backgroundColor: Colors.red,
+                                            behavior: SnackBarBehavior.floating,
+                                          ),
+                                        );
+                                      }
+                                      return;
                                     }
-                                    return;
-                                  }
-                                  final admin = await isAdmin;
-                                  if (admin) {
                                     showAdminFeedbackScreen(context);
-                                  } else {
-                                    showFeedbackDialog(context);
+                                  } else if (value == 'logout') {
+                                    _logout(context);
                                   }
                                 },
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.logout,
-                                    color: Colors.white, size: 28), // Changed to white
-                                onPressed: () => _logout(context),
+                                itemBuilder: (context) {
+                                  final admin = adminSnapshot.data ?? false;
+                                  return [
+                                    if (admin)
+                                      PopupMenuItem(
+                                        value: 'editors',
+                                        child: Row(
+                                          children: const [
+                                            Icon(Icons.manage_accounts, color: Color(0xFF1976D2)),
+                                            SizedBox(width: 10),
+                                            Text('Manage Editors'),
+                                          ],
+                                        ),
+                                      ),
+                                    if (admin)
+                                      PopupMenuItem(
+                                        value: 'logs',
+                                        child: Row(
+                                          children: const [
+                                            Icon(Icons.list_alt, color: Color(0xFF1976D2)),
+                                            SizedBox(width: 10),
+                                            Text('View Logs'),
+                                          ],
+                                        ),
+                                      ),
+                                    if (admin)
+                                      PopupMenuItem(
+                                        value: 'make_folder',
+                                        child: Row(
+                                          children: const [
+                                            Icon(Icons.create_new_folder, color: Color(0xFF1976D2)),
+                                            SizedBox(width: 10),
+                                            Text('Make Folder'),
+                                          ],
+                                        ),
+                                      ),
+                                    const PopupMenuDivider(),
+                                    PopupMenuItem(
+                                      value: 'upload',
+                                      child: Row(
+                                        children: const [
+                                          Icon(Icons.upload_file, color: Color(0xFF1976D2)),
+                                          SizedBox(width: 10),
+                                          Text('Upload'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'feedback',
+                                      child: Row(
+                                        children: const [
+                                          Icon(Icons.feedback_outlined, color: Color(0xFF1976D2)),
+                                          SizedBox(width: 10),
+                                          Text('Feedback'),
+                                        ],
+                                      ),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'logout',
+                                      child: Row(
+                                        children: const [
+                                          Icon(Icons.logout, color: Color(0xFF1976D2)),
+                                          SizedBox(width: 10),
+                                          Text('Logout'),
+                                        ],
+                                      ),
+                                    ),
+                                  ];
+                                },
                               ),
                             ],
                           ],
@@ -1525,57 +1664,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                         ),
                       ),
                     ),
-                    // --- Show Make Folder and Upload for editor/admin everywhere, for user only Upload at 2nd-level folder ---
-                    if (!_selectionMode &&
-                        (editor || showUploadButtonForUser))
-                      Padding(
-                        padding: const EdgeInsets.only(top: 16.0, bottom: 10.0),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            if (editor)
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.create_new_folder),
-                                label: const Text('Make Folder'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF1976D2),
-                                  foregroundColor: Colors.white,
-                                  elevation: 2,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 14, horizontal: 24),
-                                  textStyle: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                onPressed: _showCreateFolderDialog,
-                              ),
-                            if (editor) const SizedBox(width: 18),
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.upload_file),
-                              label: const Text('Upload'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1976D2),
-                                foregroundColor: Colors.white,
-                                elevation: 2,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 14, horizontal: 24),
-                                textStyle: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              onPressed: _uploadFile,
-                            ),
-                          ],
-                        ),
-                      ),
+
                   ],
                 ),
               ),
