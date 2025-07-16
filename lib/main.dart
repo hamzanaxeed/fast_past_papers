@@ -1,7 +1,9 @@
+import 'package:fast_past_papers/intro_Screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'authentications.dart';
 import 'welcome_Screen.dart';
@@ -10,16 +12,26 @@ import 'log.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
   await Firebase.initializeApp();
 
-  // Initialize Supabase
   await Supabase.initialize(
     url: 'https://seutsksnrtvazixtrraq.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNldXRza3NucnR2YXppeHRycmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExODQ1OTIsImV4cCI6MjA2Njc2MDU5Mn0.AmVZJewqpcB9Om0T0olCDgSCbDr5vzNpWCHeyLL0GPI',
   );
 
-  runApp(const MyApp());
+  final prefs = await SharedPreferences.getInstance();
+  final isFirstTime = prefs.getBool('introSeen') ?? false;
+
+  if (!isFirstTime) {
+    await prefs.setBool('introSeen', true);
+  }
+
+  runApp(
+    MaterialApp(
+      home: isFirstTime ? const MyApp() : const into_Screen(),
+      debugShowCheckedModeBanner: false,
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -30,26 +42,18 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-
-  bool hasLogged = false;
-
   @override
   Widget build(BuildContext context) {
-
     return MaterialApp(
       title: 'Fast Past Papers',
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: Colors.blue,
           brightness: Brightness.light,
         ),
-
         useMaterial3: true,
-
         scaffoldBackgroundColor: const Color(0xFFF7FAF9),
-
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF1976D2),
           iconTheme: IconThemeData(color: Colors.white),
@@ -57,9 +61,8 @@ class _MyAppState extends State<MyApp> {
           titleTextStyle: TextStyle(
             color: Colors.white,
             fontSize: 22,
-            letterSpacing: 1.1
+            letterSpacing: 1.1,
           ),
-
           toolbarTextStyle: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -67,40 +70,35 @@ class _MyAppState extends State<MyApp> {
             letterSpacing: 1,
           ),
         ),
-
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
-            backgroundColor: Color(0xFF1976D2),
+            backgroundColor: const Color(0xFF1976D2),
             foregroundColor: Colors.white,
             textStyle: const TextStyle(fontWeight: FontWeight.w600),
             elevation: 4,
-            shape: RoundedRectangleBorder(
+            shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(16)),
             ),
           ),
         ),
-
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: Color(0xFF1976D2),
+            foregroundColor: const Color(0xFF1976D2),
             side: const BorderSide(color: Color(0xFF1976D2), width: 1.5),
             textStyle: const TextStyle(fontWeight: FontWeight.w600),
-            shape: RoundedRectangleBorder(
+            shape: const RoundedRectangleBorder(
               borderRadius: BorderRadius.all(Radius.circular(16)),
             ),
           ),
         ),
-
-        cardTheme: CardThemeData(
+        cardTheme: const CardThemeData(
           color: Colors.white,
           elevation: 10,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(28)),
           ),
         ),
-
         inputDecorationTheme: InputDecorationTheme(
-
           filled: true,
           fillColor: Colors.white,
           border: OutlineInputBorder(
@@ -109,55 +107,61 @@ class _MyAppState extends State<MyApp> {
           ),
           labelStyle: const TextStyle(color: Colors.black87),
         ),
-
         snackBarTheme: const SnackBarThemeData(
           backgroundColor: Color(0xFF1976D2),
           contentTextStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
           behavior: SnackBarBehavior.floating,
         ),
-
         iconTheme: const IconThemeData(color: Color(0xFF1976D2)),
-
         textSelectionTheme: const TextSelectionThemeData(
           cursorColor: Color(0xFF1976D2),
           selectionColor: Color(0xFF90CAF9),
           selectionHandleColor: Color(0xFF1976D2),
         ),
-
         floatingActionButtonTheme: const FloatingActionButtonThemeData(
           backgroundColor: Color(0xFF1976D2),
           foregroundColor: Colors.white,
         ),
-
         progressIndicatorTheme: const ProgressIndicatorThemeData(
           color: Color(0xFF1976D2),
         ),
       ),
       home: StreamBuilder<fb_auth.User?>(
-
         stream: fb_auth.FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.active) {
-
             final user = snapshot.data;
-
             if (user != null) {
-              // Log when the user is authenticated and app opens
               logUserEvent('App Opened');
               return const WelcomeScreen();
             } else {
-              return const EmailAuthScreen();
+              return Stack(
+                children: [
+                  const EmailAuthScreen(),
+                  Positioned(
+                    bottom: 24,
+                    right: 24,
+                    child: FloatingActionButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const into_Screen()),
+                        );
+                      },
+                      tooltip: 'View Intro Screen',
+                      child: const Icon(Icons.info_outline),
+                    ),
+                  ),
+                ],
+              );
             }
           }
-
-          // While checking auth state
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         },
       ),
-
     );
   }
 }
