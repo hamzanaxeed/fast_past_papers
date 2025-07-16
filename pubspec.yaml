@@ -20,6 +20,9 @@ dependencies:
   shared_preferences: ^2.5.3
   file_picker: ^10.2.0
   flutter_pdfview: ^1.4.1+1
+  webview_flutter: ^4.13.0
+  open_file: ^3.5.10
+  url_launcher: ^6.2.6
 
 dev_dependencies:
   flutter_test:

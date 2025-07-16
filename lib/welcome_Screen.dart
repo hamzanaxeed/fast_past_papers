@@ -1,5 +1,5 @@
 // To revert to the old look, restore the original _cardDecoration and gradient in build().
-
+import 'other_Viewers.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'authentications.dart';
@@ -233,6 +233,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         context,
         MaterialPageRoute(
           builder: (_) => PdfViewerScreen(url: url, name: file.name),
+        ),
+      );
+    } else if (_isPptx(file.name) || _isDocx(file.name) || _isXlsx(file.name) || _isTxt(file.name)) {
+      final filePath = currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
+      final url = Supabase.instance.client.storage
+          .from('pastpapers')
+          .getPublicUrl(filePath);
+      logUserEvent('Viewed Other File', details: filePath);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OtherViewer(url: url, name: file.name),
         ),
       );
     }
@@ -486,6 +498,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     return ext.endsWith('.pdf');
   }
 
+  bool _isPptx(String name) => name.toLowerCase().endsWith('.pptx');
+  bool _isDocx(String name) => name.toLowerCase().endsWith('.docx');
+  bool _isXlsx(String name) => name.toLowerCase().endsWith('.xlsx');
+  bool _isTxt(String name) => name.toLowerCase().endsWith('.txt');
+
   // Add this method to get the number of items in a folder (with cache)
   Future<int> _getFolderItemCount(String folderPath) async {
     if (_folderCounts.containsKey(folderPath)) {
@@ -683,7 +700,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     ? const Icon(Icons.image, color: Colors.blue, size: 28)
                     : _isPdf(r.file.name)
                         ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
-                        : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
+                        : _isPptx(r.file.name)
+                            ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
+                            : _isDocx(r.file.name)
+                                ? const Icon(Icons.description, color: Colors.indigo, size: 28)
+                                : _isXlsx(r.file.name)
+                                    ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
+                                    : _isTxt(r.file.name)
+                                        ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
+                                        : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
               ),
               title: Text(
                 r.file.name,
@@ -838,7 +863,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   ? const Icon(Icons.image, color: Colors.blue, size: 28)
                   : _isPdf(f.name)
                       ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
-                      : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
+                      : _isPptx(f.name)
+                          ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
+                          : _isDocx(f.name)
+                              ? const Icon(Icons.description, color: Colors.indigo, size: 28)
+                              : _isXlsx(f.name)
+                                  ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
+                                  : _isTxt(f.name)
+                                      ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
+                                      : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
             ),
             title: Text(
               f.name,
