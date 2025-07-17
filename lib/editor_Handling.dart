@@ -217,8 +217,8 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Editors', style: TextStyle(color: Colors.white)),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        backgroundColor: const Color(0xFF1976D2),
+        iconTheme: const IconThemeData(color: Colors.white),
         elevation: 2,
         actions: [
           IconButton(
@@ -234,96 +234,105 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search editor email...',
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
-                      filled: true,
-                      fillColor: Colors.white,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search editor email...',
+                        prefixIcon: const Icon(Icons.search),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                        filled: true,
+                        fillColor: Colors.white,
+                      ),
+                      onChanged: (v) => setState(() => _searchQuery = v),
                     ),
-                    onChanged: (v) => setState(() => _searchQuery = v),
                   ),
-                ),
-                const SizedBox(width: 12),
-                FutureBuilder<List<Map<String, dynamic>>>(
+                  const SizedBox(width: 12),
+                  FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _editorsFuture,
+                    builder: (context, snapshot) {
+                      final count = snapshot.data?.length ?? 0;
+                      return Chip(
+                        label: Text('Total: $count', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        backgroundColor: Colors.blue.shade50,
+                      );
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
                   future: _editorsFuture,
                   builder: (context, snapshot) {
-                    final count = snapshot.data?.length ?? 0;
-                    return Chip(
-                      label: Text('Total: $count', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      backgroundColor: Colors.blue.shade50,
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final editors = _filteredEditors(snapshot.data ?? []);
+                    if (editors.isEmpty) {
+                      return Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Icon(Icons.person_off, color: Colors.grey, size: 48),
+                            SizedBox(height: 8),
+                            Text('No editors found.', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                          ],
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      itemCount: editors.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, i) {
+                        final editor = editors[i];
+                        final email = editor['Editor_Email'] ?? 'unknown';
+                        return Card(
+                          elevation: 6,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          color: Colors.white,
+                          child: ListTile(
+                            leading: const CircleAvatar(
+                              backgroundColor: Color(0xFF1976D2),
+                              child: Icon(Icons.person, color: Colors.white),
+                            ),
+                            title: Text(
+                              email,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              tooltip: "Delete Editor",
+                              onPressed: () => _showDeleteEditorDialog(email),
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: _editorsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final editors = _filteredEditors(snapshot.data ?? []);
-                  if (editors.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.person_off, color: Colors.grey, size: 48),
-                          SizedBox(height: 8),
-                          Text('No editors found.', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                        ],
-                      ),
-                    );
-                  }
-                  return ListView.separated(
-                    padding: const EdgeInsets.only(top: 8, bottom: 8),
-                    itemCount: editors.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) {
-                      final editor = editors[i];
-                      final email = editor['Editor_Email'] ?? 'unknown';
-                      return Card(
-                        elevation: 6,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        color: Colors.white,
-                        child: ListTile(
-                          leading: const CircleAvatar(
-                            backgroundColor: Color(0xFF1976D2),
-                            child: Icon(Icons.person, color: Colors.white),
-                          ),
-                          title: Text(
-                            email,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            tooltip: "Delete Editor",
-                            onPressed: () => _showDeleteEditorDialog(email),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

@@ -13,7 +13,7 @@ class _into_ScreenState extends State<into_Screen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FAF9), // Matches scaffoldBackgroundColor
+      backgroundColor: const Color(0xFFF7FAF9),
       appBar: AppBar(
         title: const Text("About Fast Past Papers"),
         backgroundColor: const Color(0xFF1976D2),
@@ -82,7 +82,7 @@ class _into_ScreenState extends State<into_Screen> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(18),
                   ),
                   textStyle: const TextStyle(fontWeight: FontWeight.w600),
                 ),
@@ -100,7 +100,7 @@ class _into_ScreenState extends State<into_Screen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: const [
           BoxShadow(
             color: Colors.black12,

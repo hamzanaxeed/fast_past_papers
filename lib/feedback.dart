@@ -12,11 +12,12 @@ void showFeedbackDialog(BuildContext context) {
     barrierDismissible: false,
     builder: (context) => Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: Colors.white,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(24),
-          color: Theme.of(context).cardColor,
+          color: Colors.white,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,

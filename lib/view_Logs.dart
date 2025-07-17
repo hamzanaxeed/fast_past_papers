@@ -238,8 +238,8 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('User Logs', style: TextStyle(color: Colors.white)),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        backgroundColor: const Color(0xFF1976D2),
+        iconTheme: const IconThemeData(color: Colors.white),
         elevation: 2,
         actions: [
           IconButton(

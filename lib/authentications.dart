@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -12,6 +11,7 @@ class EmailAuthScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7FAF9),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -26,22 +26,21 @@ class EmailAuthScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-
                 CircleAvatar(
-                    radius: 54,
-              //      backgroundColor: Color(0xFF1976D2).withOpacity(0.18),
-                    child: Image.asset('assets/logo.jpg', width: 70, height: 70),
-                  ),
+                  radius: 54,
+                  backgroundColor: Colors.blue.withOpacity(0.18),
+                  child: Image.asset('assets/logo.jpg', width: 70, height: 70),
+                ),
                 const SizedBox(height: 18),
                 Card(
-                  elevation: 18,
+                  elevation: 14,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(32),
+                    borderRadius: BorderRadius.circular(28),
                   ),
-                  color: Colors.white.withOpacity(0.98),
+                  color: Colors.white,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -56,8 +55,6 @@ class EmailAuthScreen extends StatelessWidget {
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 10),
-
-                        const SizedBox(height: 8),
                         Divider(
                           color: Colors.blue.shade100,
                           thickness: 1.2,
@@ -67,12 +64,12 @@ class EmailAuthScreen extends StatelessWidget {
                         const SizedBox(height: 18),
                         Row(
                           children: [
-                            Expanded(child: Divider()),
+                            Expanded(child: Divider(color: Colors.blue.shade100)),
                             Padding(
                               padding: const EdgeInsets.symmetric(horizontal: 8.0),
                               child: Text("or", style: TextStyle(color: Colors.grey[600])),
                             ),
-                            Expanded(child: Divider()),
+                            Expanded(child: Divider(color: Colors.blue.shade100)),
                           ],
                         ),
                         const SizedBox(height: 18),
@@ -615,12 +612,13 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF7FAF9),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFF8F8FF), Color(0xFFE3F2FD)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+            colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           ),
         ),
         child: Center(
@@ -657,7 +655,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                             style: TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.w600,
-                              color: Colors.blue,
+                              color: Color(0xFF1976D2),
                             ),
                           ),
                           const SizedBox(height: 8),

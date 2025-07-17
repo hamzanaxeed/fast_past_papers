@@ -241,6 +241,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           .from('pastpapers')
           .getPublicUrl(filePath);
       logUserEvent('Viewed Other File', details: filePath);
+      // Use push, not pushAndRemoveUntil, so back returns to last folder
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -728,7 +729,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
                 tooltip: 'Download',
                 onPressed: () {
-                  _downloadFile(r.fullPath, r.file.name);
+                  // FIX: Use correct file path for download
+                  _downloadFile(currentPath.isEmpty ? r.file.name : '$currentPath/${r.file.name}', r.file.name);
                 },
               ),
             ),
@@ -893,8 +895,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
               tooltip: 'Download',
               onPressed: () {
-                final filePath = currentPath.isEmpty ? f.name : '$currentPath/${f.name}';
-                _downloadFile(filePath, f.name);
+                // FIX: Use correct file path for download
+                _downloadFile(currentPath.isEmpty ? f.name : '$currentPath/${f.name}', f.name);
               },
             ),
           ),
@@ -903,59 +905,82 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     );
   }
 
+  // Download progress state
+  bool _downloading = false;
+  double _downloadProgress = 0.0;
+  String? _downloadError;
+  String? _downloadSavePath;
+  String? _downloadFileName;
+
   // Download file to local storage (Downloads directory or best available)
   Future<void> _downloadFile(String filePath, String fileName) async {
+    setState(() {
+      _downloading = true;
+      _downloadProgress = 0.0;
+      _downloadError = null;
+      _downloadSavePath = null;
+      _downloadFileName = fileName;
+    });
+
     try {
       final url = Supabase.instance.client.storage.from('pastpapers').getPublicUrl(filePath);
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode == 200) {
-        Directory? saveDir;
-        String? savePath;
-        if (Platform.isAndroid) {
-          final downloads = Directory('/storage/emulated/0/Download');
-          if (await downloads.exists()) {
-            saveDir = downloads;
-          } else {
-            saveDir = await getExternalStorageDirectory();
-          }
-        } else if (Platform.isIOS) {
-          saveDir = await getApplicationDocumentsDirectory();
+      final request = http.Request('GET', Uri.parse(url));
+      final response = await request.send();
+
+      if (response.statusCode != 200) {
+        throw Exception('Download failed: Server responded with status ${response.statusCode}. Please check your internet connection or try again later.');
+      }
+
+      Directory? saveDir;
+      if (Platform.isAndroid) {
+        final downloads = Directory('/storage/emulated/0/Download');
+        if (await downloads.exists()) {
+          saveDir = downloads;
         } else {
-          saveDir = await getDownloadsDirectory();
+          saveDir = await getExternalStorageDirectory();
         }
-        if (saveDir == null) {
-          throw Exception('Could not access storage directory.');
-        }
-        await saveDir.create(recursive: true);
-        savePath = '${saveDir.path}/$fileName';
-        final file = File(savePath);
-        await file.writeAsBytes(response.bodyBytes, flush: true);
-        // Log download event
-        logUserEvent('Downloaded File', details: filePath);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Downloaded to $savePath'),
-              backgroundColor: Colors.green,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          );
-        }
+      } else if (Platform.isIOS) {
+        saveDir = await getApplicationDocumentsDirectory();
       } else {
-        throw Exception('Failed to download (status ${response.statusCode})');
+        saveDir = await getDownloadsDirectory();
       }
+      if (saveDir == null) throw Exception('Download failed: Unable to access device storage.');
+
+      await saveDir.create(recursive: true);
+      final savePath = '${saveDir.path}/$fileName';
+      final file = File(savePath);
+
+      final sink = file.openWrite();
+      int received = 0;
+      final total = response.contentLength ?? 0;
+
+      await for (final chunk in response.stream) {
+        received += chunk.length;
+        sink.add(chunk);
+        setState(() {
+          _downloadProgress = total > 0 ? received / total : 0.0;
+        });
+      }
+      await sink.close();
+
+      setState(() {
+        _downloading = false;
+        _downloadProgress = 1.0;
+        _downloadSavePath = savePath;
+        _downloadError = null;
+      });
+      logUserEvent('Downloaded File', details: filePath);
     } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Download failed: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
-        );
-      }
+      setState(() {
+        _downloading = false;
+        _downloadError = e is SocketException
+            ? 'Download failed: No internet connection. Please check your network and try again.'
+            : e.toString().contains('storage')
+                ? 'Download failed: Unable to access device storage. Please check permissions.'
+                : 'Download failed: ${e.toString().replaceAll('Exception: ', '')}';
+        _downloadProgress = 0.0;
+        _downloadSavePath = null;
+      });
     }
   }
 
@@ -1443,6 +1468,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
         return WillPopScope(
           onWillPop: () async {
+            // Only handle back navigation in folder/file list, not in preview screens
             if (currentPath.isNotEmpty) {
               var path = currentPath.endsWith('/')
                   ? currentPath.substring(0, currentPath.length - 1)
@@ -1656,51 +1682,128 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 },
               ),
             ),
-            body: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
-                child: Column(
-                  children: [
-                    _buildSearchBar(),
-                    const SizedBox(height: 8),
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(28),
-                        child: Container(
-                          color: Colors.white.withOpacity(0.10),
-                          child: NotificationListener<OverscrollIndicatorNotification>(
-                            onNotification: (overscroll) {
-                              overscroll.disallowIndicator();
-                              return false;
-                            },
-                            child: RefreshIndicator(
-                              onRefresh: () async {
-                                await _loadFolder(currentPath);
-                              },
-                              child: GestureDetector(
-                                onVerticalDragEnd: (details) async {
-                                  if (details.primaryVelocity != null && details.primaryVelocity! < -200) {
-                                    await _loadFolder(currentPath);
-                                  }
+            body: Stack(
+              children: [
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+                    child: Column(
+                      children: [
+                        _buildSearchBar(),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: Container(
+                              color: Colors.white.withOpacity(0.10),
+                              child: NotificationListener<OverscrollIndicatorNotification>(
+                                onNotification: (overscroll) {
+                                  overscroll.disallowIndicator();
+                                  return false;
                                 },
-                                child: _buildList(),
+                                child: RefreshIndicator(
+                                  onRefresh: () async {
+                                    await _loadFolder(currentPath);
+                                  },
+                                  child: GestureDetector(
+                                    onVerticalDragEnd: (details) async {
+                                      if (details.primaryVelocity != null && details.primaryVelocity! < -200) {
+                                        await _loadFolder(currentPath);
+                                      }
+                                    },
+                                    child: _buildList(),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                  ),
+                ),
+                // --- Download progress bar at bottom ---
+                if (_downloading || _downloadError != null || _downloadSavePath != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Material(
+                      elevation: 12,
+                      color: Colors.white,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_downloading)
+                              Column(
+                                children: [
+                                  Text(
+                                    'Downloading ${_downloadFileName ?? ''}...',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  LinearProgressIndicator(
+                                    value: _downloadProgress,
+                                    minHeight: 8,
+                                    backgroundColor: Colors.blue.shade100,
+                                    color: Colors.blue,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text('${(_downloadProgress * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 16)),
+                                ],
+                              ),
+                            if (!_downloading && _downloadError != null)
+                              Column(
+                                children: [
+                                  const Icon(Icons.error, color: Colors.red, size: 32),
+                                  const SizedBox(height: 10),
+                                  Text(_downloadError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _downloadError = null;
+                                        _downloadSavePath = null;
+                                        _downloadFileName = null;
+                                      });
+                                    },
+                                    child: const Text('Close'),
+                                  ),
+                                ],
+                              ),
+                            if (!_downloading && _downloadError == null && _downloadSavePath != null)
+                              Column(
+                                children: [
+                                  const Icon(Icons.check_circle, color: Colors.green, size: 32),
+                                  const SizedBox(height: 10),
+                                  Text('Downloaded to $_downloadSavePath', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                  TextButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _downloadSavePath = null;
+                                        _downloadFileName = null;
+                                      });
+                                    },
+                                    child: const Text('Close'),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
           ),
         );

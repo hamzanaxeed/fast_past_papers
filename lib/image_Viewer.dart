@@ -28,7 +28,7 @@ class _ImageViewerState extends State<ImageViewer> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: const Color(0xFFF7FAF9),
       extendBodyBehindAppBar: true,
       body: GestureDetector(
         onTap: () => setState(() => _showOverlay = !_showOverlay),
@@ -73,7 +73,7 @@ class _ImageViewerState extends State<ImageViewer> {
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white), // Consistent with appbar
+                      icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF1976D2)),
                       onPressed: () => Navigator.pop(context),
                     ),
                     const SizedBox(width: 12),
@@ -81,7 +81,7 @@ class _ImageViewerState extends State<ImageViewer> {
                       child: Text(
                         widget.name,
                         style: const TextStyle(
-                          color: Colors.white, // Consistent with appbar
+                          color: Color(0xFF1976D2),
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
                           overflow: TextOverflow.ellipsis,

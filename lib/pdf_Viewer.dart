@@ -30,24 +30,75 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
 
   Future<void> _downloadPdf() async {
     try {
-      final response = await http.get(Uri.parse(widget.url));
-      if (response.statusCode == 200) {
-        final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/${widget.name}');
-        await file.writeAsBytes(response.bodyBytes, flush: true);
+      final request = http.Request('GET', Uri.parse(widget.url));
+      final response = await request.send();
+
+      if (response.statusCode != 200) {
         setState(() {
-          localPath = file.path;
+          error = 'Failed to load PDF (status ${response.statusCode}). Please check your internet connection or try again later.';
           loading = false;
         });
-      } else {
-        setState(() {
-          error = 'Failed to load PDF (status ${response.statusCode})';
-          loading = false;
-        });
+        return;
       }
-    } catch (e) {
+
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/${widget.name}');
+      final sink = file.openWrite();
+      int received = 0;
+      final total = response.contentLength ?? 0;
+
+      // Use StatefulBuilder to update progress inside dialog
+      late void Function(void Function()) dialogSetState;
+
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setStateDialog) {
+            dialogSetState = setStateDialog;
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Downloading PDF...', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(
+                    value: total > 0 ? received / total : null,
+                    minHeight: 8,
+                    backgroundColor: Colors.blue.shade100,
+                    color: Colors.blue,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('${total > 0 ? ((received / total) * 100).toStringAsFixed(0) : '...'}%', style: const TextStyle(fontSize: 16)),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+
+      await for (final chunk in response.stream) {
+        received += chunk.length;
+        sink.add(chunk);
+        dialogSetState(() {});
+      }
+      await sink.close();
+
+      if (context.mounted) Navigator.of(context).pop();
       setState(() {
-        error = 'Failed to load PDF: $e';
+        localPath = file.path;
+        loading = false;
+      });
+    } catch (e) {
+      if (context.mounted) Navigator.of(context).pop();
+      setState(() {
+        error = e is SocketException
+            ? 'Failed to load PDF: No internet connection. Please check your network and try again.'
+            : e.toString().contains('storage')
+                ? 'Failed to load PDF: Unable to access device storage. Please check permissions.'
+                : 'Failed to load PDF: ${e.toString().replaceAll('Exception: ', '')}';
         loading = false;
       });
     }
@@ -56,18 +107,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: const Color(0xFFF7FAF9),
       appBar: AppBar(
         title: Text(
           widget.name,
-          style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
+          style: const TextStyle(color: Color(0xFF1976D2), fontWeight: FontWeight.bold),
         ),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        iconTheme: Theme.of(context).appBarTheme.iconTheme,
+        backgroundColor: const Color(0xFF1976D2),
+        iconTheme: const IconThemeData(color: Colors.white),
         elevation: 2,
       ),
       body: loading
-          ? Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF1976D2)))
           : error != null
           ? Center(child: Text(error!, style: const TextStyle(color: Colors.red)))
           : localPath == null
