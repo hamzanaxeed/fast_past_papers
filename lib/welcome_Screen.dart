@@ -922,66 +922,84 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       _downloadFileName = fileName;
     });
 
-    try {
-      final url = Supabase.instance.client.storage.from('pastpapers').getPublicUrl(filePath);
-      final request = http.Request('GET', Uri.parse(url));
-      final response = await request.send();
+    Future.microtask(() async {
+      try {
+        final url = Supabase.instance.client.storage.from('pastpapers').getPublicUrl(filePath);
+        final request = http.Request('GET', Uri.parse(url));
+        final response = await request.send();
 
-      if (response.statusCode != 200) {
-        throw Exception('Download failed: Server responded with status ${response.statusCode}. Please check your internet connection or try again later.');
-      }
-
-      Directory? saveDir;
-      if (Platform.isAndroid) {
-        final downloads = Directory('/storage/emulated/0/Download');
-        if (await downloads.exists()) {
-          saveDir = downloads;
-        } else {
-          saveDir = await getExternalStorageDirectory();
+        if (response.statusCode != 200) {
+          throw Exception('Download failed: Server responded with status ${response.statusCode}. Please check your internet connection or try again later.');
         }
-      } else if (Platform.isIOS) {
-        saveDir = await getApplicationDocumentsDirectory();
-      } else {
-        saveDir = await getDownloadsDirectory();
+
+        Directory? saveDir;
+        if (Platform.isAndroid) {
+          final downloads = Directory('/storage/emulated/0/Download');
+          if (await downloads.exists()) {
+            saveDir = downloads;
+          } else {
+            saveDir = await getExternalStorageDirectory();
+          }
+        } else if (Platform.isIOS) {
+          saveDir = await getApplicationDocumentsDirectory();
+        } else {
+          saveDir = await getDownloadsDirectory();
+        }
+        if (saveDir == null) throw Exception('Download failed: Unable to access device storage.');
+
+        await saveDir.create(recursive: true);
+        final savePath = '${saveDir.path}/$fileName';
+        final file = File(savePath);
+
+        final sink = file.openWrite();
+        int received = 0;
+        final total = response.contentLength ?? 0;
+
+        // Throttle UI updates to every 100ms
+        var lastUpdate = DateTime.now();
+        double lastProgress = 0.0;
+
+        await for (final chunk in response.stream) {
+          received += chunk.length;
+          final progress = total > 0 ? received / total : 0.0;
+          final now = DateTime.now();
+          if (progress - lastProgress > 0.01 || now.difference(lastUpdate).inMilliseconds > 100) {
+            lastProgress = progress;
+            lastUpdate = now;
+            if (mounted) {
+              setState(() {
+                _downloadProgress = progress;
+              });
+            }
+          }
+          sink.add(chunk);
+        }
+        await sink.close();
+
+        if (mounted) {
+          setState(() {
+            _downloading = false;
+            _downloadProgress = 1.0;
+            _downloadSavePath = savePath;
+            _downloadError = null;
+          });
+        }
+        logUserEvent('Downloaded File', details: filePath);
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _downloading = false;
+            _downloadError = e is SocketException
+                ? 'Download failed: No internet connection. Please check your network and try again.'
+                : e.toString().contains('storage')
+                    ? 'Download failed: Unable to access device storage. Please check permissions.'
+                    : 'Download failed: ${e.toString().replaceAll('Exception: ', '')}';
+            _downloadProgress = 0.0;
+            _downloadSavePath = null;
+          });
+        }
       }
-      if (saveDir == null) throw Exception('Download failed: Unable to access device storage.');
-
-      await saveDir.create(recursive: true);
-      final savePath = '${saveDir.path}/$fileName';
-      final file = File(savePath);
-
-      final sink = file.openWrite();
-      int received = 0;
-      final total = response.contentLength ?? 0;
-
-      await for (final chunk in response.stream) {
-        received += chunk.length;
-        sink.add(chunk);
-        setState(() {
-          _downloadProgress = total > 0 ? received / total : 0.0;
-        });
-      }
-      await sink.close();
-
-      setState(() {
-        _downloading = false;
-        _downloadProgress = 1.0;
-        _downloadSavePath = savePath;
-        _downloadError = null;
-      });
-      logUserEvent('Downloaded File', details: filePath);
-    } catch (e) {
-      setState(() {
-        _downloading = false;
-        _downloadError = e is SocketException
-            ? 'Download failed: No internet connection. Please check your network and try again.'
-            : e.toString().contains('storage')
-                ? 'Download failed: Unable to access device storage. Please check permissions.'
-                : 'Download failed: ${e.toString().replaceAll('Exception: ', '')}';
-        _downloadProgress = 0.0;
-        _downloadSavePath = null;
-      });
-    }
+    });
   }
 
   Future<void> _confirmDelete(FileObject file, {required bool isFolder}) async {
