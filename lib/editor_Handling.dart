@@ -21,6 +21,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
   void initState() {
     super.initState();
     _editorsFuture = _fetchEditors();
+    logUserEvent('Editor Handling Screen Opened');
   }
 
   Future<List<Map<String, dynamic>>> _fetchEditors() async {
@@ -79,6 +80,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
 
   void _showAddEditorDialog() {
     _emailController.clear();
+    logUserEvent('Add Editor Dialog Opened');
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -136,6 +138,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
   }
 
   void _showDeleteEditorDialog(String email) {
+    logUserEvent('Delete Editor Dialog Opened', details: email);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -168,6 +171,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
   }
 
   void _showError(String message) {
+    logUserEvent('Editor Handling Error', details: message);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -187,6 +191,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
   }
 
   void _showSuccess(String message) {
+    logUserEvent('Editor Handling Success', details: message);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -207,6 +212,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
 
   List<Map<String, dynamic>> _filteredEditors(List<Map<String, dynamic>> editors) {
     if (_searchQuery.isEmpty) return editors;
+    logUserEvent('Editor Search', details: _searchQuery);
     return editors
         .where((e) => (e['Editor_Email'] ?? '').toString().toLowerCase().contains(_searchQuery.toLowerCase()))
         .toList();

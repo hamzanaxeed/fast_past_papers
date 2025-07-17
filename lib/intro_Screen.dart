@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fast_past_papers/main.dart';
+import 'log.dart';
 
 class into_Screen extends StatefulWidget {
   const into_Screen({super.key});
@@ -10,6 +11,12 @@ class into_Screen extends StatefulWidget {
 }
 
 class _into_ScreenState extends State<into_Screen> {
+  @override
+  void initState() {
+    super.initState();
+    logUserEvent('Intro Screen Opened');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -69,6 +76,7 @@ class _into_ScreenState extends State<into_Screen> {
             Center(
               child: ElevatedButton(
                 onPressed: () async {
+                  logUserEvent('Intro Screen Continue');
                   final prefs = await SharedPreferences.getInstance();
                   await prefs.setBool('hasSeenIntro', true);
 

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'welcome_Screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // <-- Add this import
-import 'log.dart'; // <-- Add this import if not present
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'log.dart';
 
 class EmailAuthScreen extends StatelessWidget {
   const EmailAuthScreen({Key? key}) : super(key: key);
@@ -26,11 +26,6 @@ class EmailAuthScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircleAvatar(
-                  radius: 54,
-                  backgroundColor: Colors.blue.withOpacity(0.18),
-                  child: Image.asset('assets/logo.jpg', width: 70, height: 70),
-                ),
                 const SizedBox(height: 18),
                 Card(
                   elevation: 14,
@@ -160,22 +155,18 @@ class _LoginFormState extends State<_LoginForm> {
           _error = "Please verify your email address before logging in. Check your inbox for a verification email.";
         });
         await FirebaseAuth.instance.signOut();
-        // Log failed login due to unverified email
         logUserEvent('Login Failed', details: 'Email not verified');
         return;
       }
 
-      // Always refresh editor/admin info before navigating
       await WelcomeScreen.fetchEditorEmailsStatic();
 
-      // Determine role for message
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
       if (email == adminEmail) {
         message = "Logged in as admin";
         logUserEvent('Admin Login', details: email);
       } else {
-        // Fetch editor emails from Supabase
         final response = await Supabase.instance.client
             .from('Editors')
             .select('Editor_Email');
@@ -203,7 +194,6 @@ class _LoginFormState extends State<_LoginForm> {
           ),
         );
 
-        // Show role message after navigation
         Future.delayed(const Duration(milliseconds: 300), () {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -219,7 +209,6 @@ class _LoginFormState extends State<_LoginForm> {
       setState(() {
         _error = _getFriendlyError(e.code, e.message);
       });
-      // Log failed login with error code
       logUserEvent('Login Failed', details: 'Code: ${e.code}, Message: ${e.message}');
     } catch (e) {
       setState(() {
@@ -259,9 +248,11 @@ class _LoginFormState extends State<_LoginForm> {
             keyboardType: TextInputType.emailAddress,
             validator: (value) {
               if (value == null || value.isEmpty) {
+                logUserEvent('Login Validation Failed', details: 'Email empty');
                 return 'Please enter your email address';
               }
               if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                logUserEvent('Login Validation Failed', details: 'Invalid email format');
                 return 'Enter a valid email address';
               }
               return null;
@@ -287,15 +278,18 @@ class _LoginFormState extends State<_LoginForm> {
                   setState(() {
                     _obscurePassword = !_obscurePassword;
                   });
+                  logUserEvent('Password Visibility Toggled', details: _obscurePassword ? 'Hidden' : 'Visible');
                 },
               ),
             ),
             obscureText: _obscurePassword,
             validator: (value) {
               if (value == null || value.isEmpty) {
+                logUserEvent('Login Validation Failed', details: 'Password empty');
                 return 'Please enter your password';
               }
               if (value.length < 6) {
+                logUserEvent('Login Validation Failed', details: 'Password too short');
                 return 'Password must be at least 6 characters long';
               }
               return null;
@@ -361,6 +355,7 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
     setState(() => _loading = true);
 
     try {
+      logUserEvent('Google Login Started');
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) {
         setState(() => _loading = false);
@@ -374,10 +369,8 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
 
-      // Always refresh editor/admin info before navigating
       await WelcomeScreen.fetchEditorEmailsStatic();
 
-      // Determine role for message
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
       if (email == _LoginFormState.adminEmail) {
@@ -446,8 +439,8 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
   Future<void> _signInAnonymously() async {
     setState(() => _loading = true);
     try {
+      logUserEvent('Guest Login Started');
       await FirebaseAuth.instance.signInAnonymously();
-      // Always refresh editor/admin info before navigating
       await WelcomeScreen.fetchEditorEmailsStatic();
 
       logUserEvent('Guest Login');
@@ -536,7 +529,6 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
   }
 }
 
-// --- Sign Up Screen (in the same file) ---
 class EmailSignUpScreen extends StatefulWidget {
   const EmailSignUpScreen({Key? key}) : super(key: key);
 
@@ -575,6 +567,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
       _info = null;
     });
     try {
+      logUserEvent('Signup Started', details: _email.text.trim());
       await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _email.text.trim(),
         password: _password.text,
@@ -676,9 +669,11 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                             keyboardType: TextInputType.emailAddress,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
+                                logUserEvent('Signup Validation Failed', details: 'Email empty');
                                 return 'Please enter your email address';
                               }
                               if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                                logUserEvent('Signup Validation Failed', details: 'Invalid email format');
                                 return 'Enter a valid email address';
                               }
                               return null;
@@ -703,15 +698,18 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                                   setState(() {
                                     _obscurePassword = !_obscurePassword;
                                   });
+                                  logUserEvent('Signup Password Visibility Toggled', details: _obscurePassword ? 'Hidden' : 'Visible');
                                 },
                               ),
                             ),
                             obscureText: _obscurePassword,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
+                                logUserEvent('Signup Validation Failed', details: 'Password empty');
                                 return 'Please enter your password';
                               }
                               if (value.length < 6) {
+                                logUserEvent('Signup Validation Failed', details: 'Password too short');
                                 return 'Password must be at least 6 characters long';
                               }
                               return null;
@@ -773,6 +771,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                             onPressed: _loading
                                 ? null
                                 : () {
+                                    logUserEvent('Navigate to Login from Signup');
                                     Navigator.pop(context);
                                    },
                             child: Text(

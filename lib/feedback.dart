@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import 'log.dart'; // <-- Add this import
+import 'log.dart';
 
-// Feedback dialog for non-admins
 void showFeedbackDialog(BuildContext context) {
   final controller = TextEditingController();
+  logUserEvent('Feedback Dialog Opened');
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -24,14 +24,8 @@ void showFeedbackDialog(BuildContext context) {
           children: [
             Icon(Icons.feedback, color: Color(0xFF1976D2), size: 48),
             const SizedBox(height: 12),
-            Text(
-              'We value your feedback!',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1976D2),
-                letterSpacing: 0.5,
-              ),
+            Text('We value your feedback!',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1976D2), letterSpacing: 0.5),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -65,7 +59,10 @@ void showFeedbackDialog(BuildContext context) {
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
                     ),
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () {
+                      logUserEvent('Feedback Dialog Cancelled');
+                      Navigator.pop(context);
+                    },
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -84,7 +81,6 @@ void showFeedbackDialog(BuildContext context) {
                     onPressed: () async {
                       final feedback = controller.text.trim();
                       if (feedback.isEmpty) return;
-
                       final user = FirebaseAuth.instance.currentUser;
                       if (user == null || user.isAnonymous) {
                         if (context.mounted) {
@@ -99,17 +95,13 @@ void showFeedbackDialog(BuildContext context) {
                         return;
                       }
                       final email = user.email ?? 'anonymous';
-
                       try {
                         await Supabase.instance.client.from('Feedback').insert({
                           'Message': feedback,
                           'Email': email,
                           'Time': DateTime.now().toIso8601String(),
                         });
-
-                        // Log feedback event
                         logUserEvent('Sent Feedback', details: feedback);
-
                         if (context.mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -157,8 +149,8 @@ void showFeedbackDialog(BuildContext context) {
   );
 }
 
-// Admin feedback screen in a modal bottom sheet
 void showAdminFeedbackScreen(BuildContext context) {
+  logUserEvent('Admin Feedback Screen Opened');
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -181,9 +173,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
         .select()
         .eq('Read', showRead)
         .order('Time', ascending: false);
-    if (response is List) {
-      return response.cast<Map<String, dynamic>>();
-    }
+    if (response is List) return response.cast<Map<String, dynamic>>();
     return [];
   }
 
@@ -234,6 +224,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
   }
 
   void _showDeleteDialog(int id) async {
+    logUserEvent('Feedback Delete Dialog Opened', details: 'Feedback ID: $id');
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -252,32 +243,24 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
         ],
       ),
     );
-    if (confirm == true) {
-      await _deleteFeedback(id);
-    }
+    if (confirm == true) await _deleteFeedback(id);
   }
 
   void _showFeedbackDetailDialog(Map<String, dynamic> fb, bool isRead) {
     final formattedTime = fb['Time'] != null
         ? DateFormat('yyyy-MM-dd  hh:mm a').format(DateTime.tryParse(fb['Time']) ?? DateTime.now())
         : '';
+    logUserEvent('Feedback Detail Dialog Opened', details: 'Feedback ID: ${fb['id']}');
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Row(
           children: [
-            Icon(
-              isRead ? Icons.mark_email_read : Icons.feedback,
-              color: isRead ? Colors.green : const Color(0xFF1976D2),
-            ),
+            Icon(isRead ? Icons.mark_email_read : Icons.feedback, color: isRead ? Colors.green : const Color(0xFF1976D2)),
             const SizedBox(width: 10),
             Expanded(
-              child: Text(
-                fb['Email'] ?? 'anonymous',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text(fb['Email'] ?? 'anonymous', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
@@ -285,19 +268,13 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              fb['Message'] ?? '',
-              style: const TextStyle(fontSize: 16),
-            ),
+            Text(fb['Message'] ?? '', style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 18),
             Row(
               children: [
                 const Icon(Icons.access_time, size: 18, color: Colors.grey),
                 const SizedBox(width: 6),
-                Text(
-                  formattedTime,
-                  style: const TextStyle(fontSize: 13, color: Colors.grey),
-                ),
+                Text(formattedTime, style: const TextStyle(fontSize: 13, color: Colors.grey)),
               ],
             ),
           ],
@@ -379,11 +356,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
               const SizedBox(height: 16),
               const Text(
                 'User Feedbacks',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF1976D2),
-                ),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
               ),
               const SizedBox(height: 8),
               Padding(
@@ -396,11 +369,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                       label: const Text('Unread'),
                       selected: !showRead,
                       onSelected: (selected) {
-                        if (showRead) {
-                          setState(() {
-                            showRead = false;
-                          });
-                        }
+                        if (showRead) setState(() => showRead = false);
                       },
                       selectedColor: const Color(0xFF1976D2),
                       labelStyle: TextStyle(color: !showRead ? Colors.white : Colors.black),
@@ -410,11 +379,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                       label: const Text('Read'),
                       selected: showRead,
                       onSelected: (selected) {
-                        if (!showRead) {
-                          setState(() {
-                            showRead = true;
-                          });
-                        }
+                        if (!showRead) setState(() => showRead = true);
                       },
                       selectedColor: const Color(0xFF1976D2),
                       labelStyle: TextStyle(color: showRead ? Colors.white : Colors.black),
@@ -426,9 +391,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                 child: FutureBuilder<List<Map<String, dynamic>>>(
                   future: _fetchFeedbacks(),
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
+                    if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
                     final feedbacks = snapshot.data ?? [];
                     if (feedbacks.isEmpty) {
                       return Center(child: Text(showRead ? 'No read feedbacks found.' : 'No unread feedbacks found.', style: TextStyle(fontSize: 18, color: Colors.grey)));
@@ -447,9 +410,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                         return GestureDetector(
                           onTap: () => _showFeedbackDetailDialog(fb, isRead),
                           onLongPress: () {
-                            if (fb['id'] != null) {
-                              _showDeleteDialog(fb['id'] as int);
-                            }
+                            if (fb['id'] != null) _showDeleteDialog(fb['id'] as int);
                           },
                           child: Container(
                             decoration: BoxDecoration(
@@ -467,10 +428,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Icon(
-                                  isRead ? Icons.mark_email_read : Icons.feedback,
-                                  color: isRead ? Colors.green : const Color(0xFF1976D2),
-                                ),
+                                Icon(isRead ? Icons.mark_email_read : Icons.feedback, color: isRead ? Colors.green : const Color(0xFF1976D2)),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
@@ -481,43 +439,25 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                                           Expanded(
                                             child: Text(
                                               fb['Email'] ?? 'anonymous',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                              ),
+                                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                               overflow: TextOverflow.ellipsis,
                                             ),
                                           ),
                                           if (isRead)
                                             const Padding(
                                               padding: EdgeInsets.only(left: 8.0),
-                                              child: Text(
-                                                'Read',
-                                                style: TextStyle(
-                                                  color: Colors.green,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 13,
-                                                ),
-                                              ),
+                                              child: Text('Read', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 13)),
                                             ),
                                         ],
                                       ),
                                       const SizedBox(height: 6),
-                                      Text(
-                                        fb['Message'] ?? '',
-                                        style: const TextStyle(fontSize: 15),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                                      Text(fb['Message'] ?? '', style: const TextStyle(fontSize: 15), maxLines: 2, overflow: TextOverflow.ellipsis),
                                       const SizedBox(height: 8),
                                       Row(
                                         children: [
                                           const Icon(Icons.access_time, size: 15, color: Colors.grey),
                                           const SizedBox(width: 4),
-                                          Text(
-                                            formattedTime,
-                                            style: const TextStyle(fontSize: 12, color: Colors.grey),
-                                          ),
+                                          Text(formattedTime, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                                         ],
                                       ),
                                     ],

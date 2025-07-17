@@ -3,44 +3,30 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Only log events if not admin
+// Log only essential info, concise event and details.
 Future<void> logUserEvent(String event, {String? details}) async {
   try {
     final user = fb_auth.FirebaseAuth.instance.currentUser;
     final email = user?.email ?? 'anonymous';
-    const adminEmail = 'l230618@lhr.nu.edu.pk';
+    if (email.toLowerCase() == 'l230618@lhr.nu.edu.pk') return; // skip admin
 
-    if (email.toLowerCase() == adminEmail) {
-      // Do not log for admin
-      return;
-    }
-
-    final logData = {
+    await Supabase.instance.client.from('log_table').insert({
       'Email': email,
-      'Event': event,
+      'Event': event.length > 32 ? event.substring(0, 32) : event,
+      if (details != null && details.isNotEmpty)
+        'Details': details.length > 64 ? details.substring(0, 64) : details,
       'Time': DateTime.now().toIso8601String(),
-    };
-    if (details != null) {
-      logData['Details'] = details;
-    }
-
-    await Supabase.instance.client.from('log_table').insert(logData);
-  } catch (e) {
-    // Optionally handle/log error
-  }
+    });
+  } catch (_) {}
 }
 
-/// Log an edit event to the Edit_Log table.
-/// [email] - The user's email.
-/// [event] - The event description (e.g., "folder_Name was created" or "file was created").
+// Concise edit log
 Future<void> logEditEvent(String email, String event) async {
   try {
     await Supabase.instance.client.from('Edit_Log').insert({
       'Email': email,
-      'Event': event,
+      'Event': event.length > 48 ? event.substring(0, 48) : event,
       'Time': DateTime.now().toIso8601String(),
     });
-  } catch (e) {
-    // Optionally handle/log error
-  }
+  } catch (_) {}
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'log.dart';
 
 class ImageViewer extends StatefulWidget {
   final String url;
@@ -20,6 +21,12 @@ class _ImageViewerState extends State<ImageViewer> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    logUserEvent('Image Viewer Opened', details: widget.name);
+  }
+
+  @override
   void dispose() {
     _transformationController.dispose();
     super.dispose();
@@ -31,9 +38,13 @@ class _ImageViewerState extends State<ImageViewer> {
       backgroundColor: const Color(0xFFF7FAF9),
       extendBodyBehindAppBar: true,
       body: GestureDetector(
-        onTap: () => setState(() => _showOverlay = !_showOverlay),
+        onTap: () {
+          setState(() => _showOverlay = !_showOverlay);
+          logUserEvent('Image Viewer Overlay Toggled', details: _showOverlay ? 'Shown' : 'Hidden');
+        },
         onVerticalDragEnd: (_) {
           if (!_isZoomedIn) {
+            logUserEvent('Image Viewer Drag Close', details: widget.name);
             Navigator.of(context).maybePop();
           }
         },

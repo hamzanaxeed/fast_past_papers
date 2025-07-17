@@ -227,6 +227,7 @@ class _MyAppState extends State<MyApp> {
                     right: 24,
                     child: FloatingActionButton(
                       onPressed: () {
+                        logUserEvent('Intro Screen Opened');
                         Navigator.push(
                           context,
                           MaterialPageRoute(builder: (context) => const into_Screen()),
