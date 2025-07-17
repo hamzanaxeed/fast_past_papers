@@ -31,8 +31,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
     final response = await Supabase.instance.client
         .from(table)
         .select()
-        .order('Time', ascending: false)
-        .limit(200);
+        .order('Time', ascending: false);
     if (response is List) {
       return response.cast<Map<String, dynamic>>();
     }
