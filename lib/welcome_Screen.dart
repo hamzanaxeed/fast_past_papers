@@ -52,10 +52,13 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   String searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // Admin email
-  static const String adminEmail = 'l230618@lhr.nu.edu.pk';
+  // Remove static const adminEmail
+  // static const String adminEmail = 'l230618@lhr.nu.edu.pk';
+
+  List<String> admin_Emails = []; // Store admin emails fetched from Supabase
   List<String> editor_Emails = []; // Ensure this is always a list, never null
   bool editorsFetched = false;
+  bool adminsFetched = false; // Track if admins are fetched
 
   // Add this map to cache folder item counts
   final Map<String, int> _folderCounts = {};
@@ -100,16 +103,42 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     }
   }
 
+  // Fetch admin emails from Supabase Admins table
+  Future<void> fetchAdminEmails() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('Admins')
+          .select('admin_Email');
+
+      print('DEBUG: Admin response 11111111111111: $response'); // Debug log
+
+      if (response is List) {
+        admin_Emails = response
+            .map((e) => e['admin_Email']?.toString().toLowerCase())
+            .where((email) => email != null)
+            .cast<String>()
+            .toList();
+        adminsFetched = true;
+      } else {
+        print('Unexpected admin response format: $response');
+      }
+    } catch (e) {
+      print('Error fetching admin emails: $e');
+      adminsFetched = false;
+    }
+  }
+
   Future<bool> get isAdmin async {
-    await fetchEditorEmails();
-    return FirebaseAuth.instance.currentUser?.email?.toLowerCase() == adminEmail;
+    await fetchAdminEmails();
+    final email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
+    return email != null && admin_Emails.contains(email);
   }
 
   Future<bool> get isEditor async {
     await fetchEditorEmails();
     final email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
-    // Ensure editor_Emails is always a list, never null
-    return email == adminEmail || (email != null && (editor_Emails).contains(email));
+    // Editor if in editors or admins
+    return (email != null && (editor_Emails.contains(email) || admin_Emails.contains(email)));
   }
 
   String get displayPath {
@@ -125,7 +154,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   @override
   void initState() {
     super.initState();
-    fetchEditorEmails().then((_) {
+    // Fetch both admins and editors before loading folder
+    Future.wait([fetchAdminEmails(), fetchEditorEmails()]).then((_) {
       _loadFolder('');
     });
     _buildSearchCache();
@@ -554,15 +584,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     }
     try {
       final contents = await Supabase.instance.client.storage.from('pastpapers').list(path: folderPath);
-      // Exclude .keep and .emptyFolderPlaceholder
       final count = contents.where((f) => f.name != '.keep' && f.name != '.emptyFolderPlaceholder').length;
       _folderCounts[folderPath] = count;
       return count;
-    } catch (_) {
+    } catch (e) {
+      print('Error fetching folder count for $folderPath: $e'); // Add this line
       return 0;
     }
   }
-
   // Recursively fetch all files/folders under a given path for global search
   // Add maxDepth and maxResults to speed up search and avoid excessive recursion
   Future<List<_SearchResult>> _fetchAllFilesAndFolders(
@@ -766,7 +795,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                 child: Text(
                   r.file.name,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 18, color: Colors.white),
+                      fontWeight: FontWeight.w600, fontSize: 18, color: Colors.deepPurple),
                 ),
               ),
               subtitle: Text(
@@ -935,7 +964,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                 style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 18,
-                    color: Colors.white),
+                    color: Colors.deepPurple),
               ),
             ),
             subtitle: null,
