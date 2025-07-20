@@ -43,6 +43,8 @@ class _SearchResult {
 }
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
+
+  String _pendingSearchQuery = '';
   String currentPath = '';
   List<FileObject> items = [];
   bool loading = true;
@@ -73,6 +75,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   // Add this flag to track cache building
   bool _buildingCache = false;
+
+  // String _pendingSearchQuery = ''; // Track last search query while cache is building
 
   // Always fetch editor emails before checking roles
   Future<void> fetchEditorEmails() async {
@@ -155,6 +159,29 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         _allFilesCache = list;
         _buildingCache = false;
       });
+      // If there was a pending search query, update results now
+      if (_pendingSearchQuery.isNotEmpty) {
+        _updateSearchResults(_pendingSearchQuery);
+      }
+    }
+  }
+
+  void _updateSearchResults(String query) {
+    if (_allFilesCache.isNotEmpty) {
+      final result = _allFilesCache.where((f) =>
+        f.file.name.toLowerCase().contains(query) ||
+        f.fullPath.toLowerCase().contains(query)
+      ).toList();
+      setState(() {
+        _globalSearchResults = result;
+        _globalSearchLoading = false;
+      });
+    } else {
+      setState(() {
+        _globalSearchResults = [];
+        _globalSearchLoading = true;
+      });
+      _pendingSearchQuery = query; // Save query for when cache is ready
     }
   }
 
@@ -610,28 +637,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             setState(() {
               searchQuery = query;
             });
-
+            _pendingSearchQuery = query;
             if (query.isNotEmpty) {
-              if (_allFilesCache.isNotEmpty) {
-                final result = _allFilesCache.where((f) =>
-                  f.file.name.toLowerCase().contains(query) ||
-                  f.fullPath.toLowerCase().contains(query)
-                ).toList();
-                setState(() {
-                  _globalSearchResults = result;
-                  _globalSearchLoading = false;
-                });
-              } else {
-                setState(() {
-                  _globalSearchResults = [];
-                  _globalSearchLoading = true;
-                });
-              }
+              _updateSearchResults(query);
             } else {
               setState(() {
                 _globalSearchResults = [];
                 _globalSearchLoading = false;
               });
+              _pendingSearchQuery = '';
             }
           },
         ),
@@ -641,33 +655,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   // Improved list view with more spacing and hover effect
   Widget _buildList() {
-    if (_globalSearchLoading) {
+    // Show loading only if cache is building and no results yet
+    if ((_globalSearchLoading || _buildingCache) && searchQuery.isNotEmpty && _globalSearchResults.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (searchQuery.isNotEmpty) {
-      // Show loading if cache is not ready yet
-      if (_allFilesCache.isEmpty) {
-        return const Center(child: CircularProgressIndicator());
-      }
-      // If searchQuery is not empty and cache is loaded but _globalSearchResults is empty,
-      // re-run the search to ensure results are up-to-date (fixes "no result found" bug)
-      if (_globalSearchResults.isEmpty && _allFilesCache.isNotEmpty) {
-        final result = _allFilesCache.where((f) =>
-          f.file.name.toLowerCase().contains(searchQuery)
-        ).toList();
-        // Update results and rebuild
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          setState(() {
-            _globalSearchResults = result;
-            _globalSearchLoading = false; // <-- Ensure loading is stopped
-          });
-        });
-        // Show nothing while updating (prevents infinite loading)
-        return const SizedBox.shrink();
-      }
       final folders = _globalSearchResults.where((r) => _isFolder(r.file)).toList();
       final files = _globalSearchResults.where((r) => !_isFolder(r.file)).toList();
-      if (folders.isEmpty && files.isEmpty) {
+      if (folders.isEmpty && files.isEmpty && !_buildingCache) {
         return const Center(
           child: Padding(
             padding: EdgeInsets.only(top: 40),
@@ -744,30 +739,36 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             margin: const EdgeInsets.symmetric(vertical: 10),
             decoration: _cardDecoration(),
             child: ListTile(
-              leading: Container(
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(12),
+              leading: Padding(
+                padding: const EdgeInsets.only(right: 12), // Increased spacing between icon and name
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: _isImage(r.file.name)
+                      ? const Icon(Icons.image, color: Colors.blue, size: 28)
+                      : _isPdf(r.file.name)
+                          ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
+                          : _isPptx(r.file.name)
+                              ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
+                              : _isDocx(r.file.name)
+                                  ? const Icon(Icons.description, color: Colors.indigo, size: 28)
+                                  : _isXlsx(r.file.name)
+                                      ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
+                                      : _isTxt(r.file.name)
+                                          ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
+                                          : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
                 ),
-                padding: const EdgeInsets.all(6),
-                child: _isImage(r.file.name)
-                    ? const Icon(Icons.image, color: Colors.blue, size: 28)
-                    : _isPdf(r.file.name)
-                        ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
-                        : _isPptx(r.file.name)
-                            ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
-                            : _isDocx(r.file.name)
-                                ? const Icon(Icons.description, color: Colors.indigo, size: 28)
-                                : _isXlsx(r.file.name)
-                                    ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
-                                    : _isTxt(r.file.name)
-                                        ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
-                                        : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
               ),
-              title: Text(
-                r.file.name,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w600, fontSize: 18, color: Colors.black87),
+              title: Padding(
+                padding: const EdgeInsets.only(right: 12), // Space between name and download button
+                child: Text(
+                  r.file.name,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 18, color: Colors.black87),
+                ),
               ),
               // Show path as subtitle when searching
               subtitle: Text(
@@ -779,12 +780,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               onLongPress: () => _onLongPressItem(r.file),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               hoverColor: Colors.blue.withOpacity(0.07),
-              trailing: IconButton(
-                icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
-                tooltip: 'Download',
-                onPressed: () {
-                  _downloadFile(currentPath.isEmpty ? r.file.name : '$currentPath/${r.file.name}', r.file.name);
-                },
+              trailing: Padding(
+                padding: const EdgeInsets.only(left: 8), // Space between name and download button
+                child: IconButton(
+                  icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
+                  tooltip: 'Download',
+                  onPressed: () {
+                    _downloadFile(currentPath.isEmpty ? r.file.name : '$currentPath/${r.file.name}', r.file.name);
+                  },
+                ),
               ),
             ),
           )),
@@ -915,32 +919,38 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           margin: const EdgeInsets.symmetric(vertical: 10),
           decoration: _cardDecoration(),
           child: ListTile(
-            leading: Container(
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(12),
+            leading: Padding(
+              padding: const EdgeInsets.only(right: 12), // Increased spacing between icon and name
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(6),
+                child: _isImage(f.name)
+                    ? const Icon(Icons.image, color: Colors.blue, size: 28)
+                    : _isPdf(f.name)
+                        ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
+                        : _isPptx(f.name)
+                            ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
+                            : _isDocx(f.name)
+                                ? const Icon(Icons.description, color: Colors.indigo, size: 28)
+                                : _isXlsx(f.name)
+                                    ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
+                                    : _isTxt(f.name)
+                                        ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
+                                        : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
               ),
-              padding: const EdgeInsets.all(6),
-              child: _isImage(f.name)
-                  ? const Icon(Icons.image, color: Colors.blue, size: 28)
-                  : _isPdf(f.name)
-                      ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
-                      : _isPptx(f.name)
-                          ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
-                          : _isDocx(f.name)
-                              ? const Icon(Icons.description, color: Colors.indigo, size: 28)
-                              : _isXlsx(f.name)
-                                  ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
-                                  : _isTxt(f.name)
-                                      ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
-                                      : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
             ),
-            title: Text(
-              f.name,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 18,
-                  color: Colors.black87),
+            title: Padding(
+              padding: const EdgeInsets.only(right: 12), // Space between name and download button
+              child: Text(
+                f.name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 18,
+                    color: Colors.black87),
+              ),
             ),
             // Do NOT show subtitle (path) when browsing
             subtitle: null,
