@@ -35,7 +35,7 @@ dev_dependencies:
 flutter_icons:
   android: true
   ios: true
-  image_path: "assets/icons.png" # <-- Replace with your image path
+  image_path: "assets/icons.png"
 
 flutter:
 

@@ -26,14 +26,23 @@ class EmailAuthScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Hero(
+                  tag: 'past_paper_icon',
+                  child: CircleAvatar(
+                    radius: 54,
+                    backgroundColor: Colors.blue.withOpacity(0.18),
+                    child: Image.asset('assets/logo.jpg', width: 70, height: 70),
+                  ),
+                ),
                 const SizedBox(height: 18),
                 Card(
-                  elevation: 14,
+                  elevation: 18,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(32),
                   ),
                   color: Colors.white,
+                  shadowColor: Colors.blue.withOpacity(0.12),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
                     child: Column(
@@ -42,10 +51,10 @@ class EmailAuthScreen extends StatelessWidget {
                         const Text(
                           'Everything you need fastians',
                           style: TextStyle(
-                            fontSize: 24,
+                            fontSize: 26,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF1976D2),
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.7,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -74,8 +83,11 @@ class EmailAuthScreen extends StatelessWidget {
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(
-                                builder: (_) => const EmailSignUpScreen(),
+                              PageRouteBuilder(
+                                pageBuilder: (_, __, ___) => const EmailSignUpScreen(),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return FadeTransition(opacity: animation, child: child);
+                                },
                               ),
                             );
                           },
@@ -235,88 +247,113 @@ class _LoginFormState extends State<_LoginForm> {
       key: _formKey,
       child: Column(
         children: [
-          TextFormField(
-            controller: _email,
-            decoration: InputDecoration(
-              labelText: 'Email',
-              prefixIcon: const Icon(Icons.email),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            child: TextFormField(
+              controller: _email,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                prefixIcon: const Icon(Icons.email),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                labelStyle: const TextStyle(color: Colors.black87),
               ),
-              labelStyle: const TextStyle(color: Colors.black87),
+              keyboardType: TextInputType.emailAddress,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  logUserEvent('Login Validation Failed', details: 'Email empty');
+                  return 'Please enter your email address';
+                }
+                if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                  logUserEvent('Login Validation Failed', details: 'Invalid email format');
+                  return 'Enter a valid email address';
+                }
+                return null;
+              },
             ),
-            keyboardType: TextInputType.emailAddress,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                logUserEvent('Login Validation Failed', details: 'Email empty');
-                return 'Please enter your email address';
-              }
-              if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                logUserEvent('Login Validation Failed', details: 'Invalid email format');
-                return 'Enter a valid email address';
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 14),
-          TextFormField(
-            controller: _password,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              labelStyle: const TextStyle(color: Colors.black87),
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscurePassword
-                      ? Icons.visibility_off
-                      : Icons.visibility,
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            child: TextFormField(
+              controller: _password,
+              decoration: InputDecoration(
+                labelText: 'Password',
+                prefixIcon: const Icon(Icons.lock),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                onPressed: () {
-                  setState(() {
-                    _obscurePassword = !_obscurePassword;
-                  });
-                  logUserEvent('Password Visibility Toggled', details: _obscurePassword ? 'Hidden' : 'Visible');
-                },
+                labelStyle: const TextStyle(color: Colors.black87),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off
+                        : Icons.visibility,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _obscurePassword = !_obscurePassword;
+                    });
+                    logUserEvent('Password Visibility Toggled', details: _obscurePassword ? 'Hidden' : 'Visible');
+                  },
+                ),
               ),
+              obscureText: _obscurePassword,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  logUserEvent('Login Validation Failed', details: 'Password empty');
+                  return 'Please enter your password';
+                }
+                if (value.length < 6) {
+                  logUserEvent('Login Validation Failed', details: 'Password too short');
+                  return 'Password must be at least 6 characters long';
+                }
+                return null;
+              },
             ),
-            obscureText: _obscurePassword,
-            validator: (value) {
-              if (value == null || value.isEmpty) {
-                logUserEvent('Login Validation Failed', details: 'Password empty');
-                return 'Please enter your password';
-              }
-              if (value.length < 6) {
-                logUserEvent('Login Validation Failed', details: 'Password too short');
-                return 'Password must be at least 6 characters long';
-              }
-              return null;
-            },
           ),
           const SizedBox(height: 14),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8.0),
-              child: Text(
-                _error!,
-                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
-                textAlign: TextAlign.center,
+              child: AnimatedOpacity(
+                opacity: _error != null ? 1 : 0,
+                duration: const Duration(milliseconds: 300),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 backgroundColor: const Color(0xFF46C2CB),
                 foregroundColor: Colors.white,
-                textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                elevation: 2,
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                elevation: 3,
               ),
               onPressed: _loading
                   ? null
@@ -325,16 +362,19 @@ class _LoginFormState extends State<_LoginForm> {
                         _signInWithEmail();
                       }
                     },
-              child: _loading
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Login'),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child: _loading
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Text('Login'),
+              ),
             ),
           ),
         ],
@@ -491,17 +531,17 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
       children: [
         Expanded(
           child: ElevatedButton.icon(
-            icon: const Icon(Icons.account_circle, size: 18),
+            icon: const Icon(Icons.account_circle, size: 20),
             label: const Text('Google'),
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               backgroundColor: Colors.red.shade400,
               foregroundColor: Colors.white,
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              elevation: 2,
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              elevation: 3,
             ),
             onPressed: _loading ? null : _signInWithGoogle,
           ),
@@ -509,17 +549,17 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
         const SizedBox(width: 10),
         Expanded(
           child: ElevatedButton.icon(
-            icon: const Icon(Icons.person_outline, size: 18),
+            icon: const Icon(Icons.person_outline, size: 20),
             label: const Text('Guest'),
             style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
               ),
               backgroundColor: const Color(0xFF46C2CB),
               foregroundColor: Colors.white,
-              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-              elevation: 2,
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              elevation: 3,
             ),
             onPressed: _loading ? null : _signInAnonymously,
           ),
@@ -630,12 +670,13 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                 ),
                 const SizedBox(height: 18),
                 Card(
-                  elevation: 14,
+                  elevation: 18,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(32),
                   ),
                   color: Colors.white,
+                  shadowColor: Colors.blue.withOpacity(0.12),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
                     child: Form(
@@ -646,8 +687,8 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                           const Text(
                             'Create Your Account',
                             style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
                               color: Color(0xFF1976D2),
                             ),
                           ),
@@ -663,7 +704,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                               labelText: 'Email',
                               prefixIcon: const Icon(Icons.email),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                             ),
                             keyboardType: TextInputType.emailAddress,
@@ -686,7 +727,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                               labelText: 'Password',
                               prefixIcon: const Icon(Icons.lock),
                               border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(14),
                               ),
                               suffixIcon: IconButton(
                                 icon: Icon(
@@ -719,19 +760,57 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                           if (_error != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Text(
-                                _error!,
-                                style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
-                                textAlign: TextAlign.center,
+                              child: AnimatedOpacity(
+                                opacity: _error != null ? 1 : 0,
+                                duration: const Duration(milliseconds: 300),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _error!,
+                                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           if (_info != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Text(
-                                _info!,
-                                style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
-                                textAlign: TextAlign.center,
+                              child: AnimatedOpacity(
+                                opacity: _info != null ? 1 : 0,
+                                duration: const Duration(milliseconds: 300),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.08),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _info!,
+                                          style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           SizedBox(
@@ -755,16 +834,19 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                                         _signUp();
                                       }
                                     },
-                              child: _loading
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : const Text('Sign Up'),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                child: _loading
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text('Sign Up'),
+                              ),
                             ),
                           ),
                           TextButton(

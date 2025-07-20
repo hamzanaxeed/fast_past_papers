@@ -150,6 +150,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void dispose() {
     _editorSub?.cancel();
     _searchController.dispose();
+    _searchTimeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -562,14 +563,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              color: Colors.blue.withOpacity(0.07),
-              blurRadius: 10,
+              color: Colors.blue.withOpacity(0.10),
+              blurRadius: 14,
               offset: const Offset(0, 2),
             ),
           ],
@@ -593,9 +595,25 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             setState(() {
               searchQuery = query;
               _globalSearchLoading = query.isNotEmpty;
+              _searchTimedOut = false;
             });
 
+            // Cancel any previous timer
+            _searchTimeoutTimer?.cancel();
+
+            // Start timer if searching
             if (query.isNotEmpty) {
+              _searchTimeoutTimer = Timer(const Duration(seconds: 10), () {
+                if (mounted && _globalSearchLoading && _globalSearchResults.isEmpty) {
+                  setState(() {
+                    _searchTimedOut = true;
+                  });
+                }
+              });
+            }
+
+            // Only search if cache is loaded
+            if (query.isNotEmpty && _allFilesCache.isNotEmpty) {
               final result = _allFilesCache.where((f) =>
                 f.file.name.toLowerCase().contains(query)
               ).toList();
@@ -603,13 +621,18 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               setState(() {
                 _globalSearchResults = result;
                 _globalSearchLoading = false;
+                _searchTimedOut = false;
               });
-            } else {
+              _searchTimeoutTimer?.cancel();
+            } else if (query.isEmpty) {
               setState(() {
                 _globalSearchResults = [];
                 _globalSearchLoading = false;
+                _searchTimedOut = false;
               });
+              _searchTimeoutTimer?.cancel();
             }
+            // If cache is not loaded, do not set _globalSearchResults yet
           },
         ),
       ),
@@ -619,14 +642,61 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   // Improved list view with more spacing and hover effect
   Widget _buildList() {
     if (_globalSearchLoading) {
+      // Show timeout message if search takes too long
+      if (_searchTimedOut) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 40),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.refresh, color: Colors.orange, size: 40),
+                SizedBox(height: 12),
+                Text(
+                  'Search is taking too long.\nYou should refresh.',
+                  style: TextStyle(fontSize: 18, color: Colors.orange, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       return const Center(child: CircularProgressIndicator());
     }
     if (searchQuery.isNotEmpty) {
-      if (_globalSearchResults.isEmpty) {
-        return const Center(child: Text('No results found.', style: TextStyle(fontSize: 18, color: Colors.grey)));
+      // Show loading if cache is not ready yet
+      if (_allFilesCache.isEmpty) {
+        return const Center(child: CircularProgressIndicator());
+      }
+      // If searchQuery is not empty and cache is loaded but _globalSearchResults is empty,
+      // re-run the search to ensure results are up-to-date (fixes "no result found" bug)
+      if (_globalSearchResults.isEmpty && _allFilesCache.isNotEmpty) {
+        final result = _allFilesCache.where((f) =>
+          f.file.name.toLowerCase().contains(searchQuery)
+        ).toList();
+        // Do not show loading if there are no results, just show "No results found"
+        if (result.isNotEmpty) {
+          // Updateresults and rebuild
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            setState(() {
+              _globalSearchResults = result;
+            });
+          });
+          // Show nothing while updating (prevents infinite loading)
+          return const SizedBox.shrink();
+        }
       }
       final folders = _globalSearchResults.where((r) => _isFolder(r.file)).toList();
       final files = _globalSearchResults.where((r) => !_isFolder(r.file)).toList();
+      if (folders.isEmpty && files.isEmpty) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Text('No results found.', style: TextStyle(fontSize: 18, color: Colors.grey)),
+          ),
+        );
+      }
       return ListView(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         children: [
@@ -650,6 +720,11 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     r.file.name.replaceAll('/', '').replaceAll('_folder', ''),
                     style: const TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87, letterSpacing: 0.2),
+                  ),
+                  // Show path as subtitle when searching
+                  subtitle: Text(
+                    r.fullPath.replaceAll('_folder', ''),
+                    style: const TextStyle(fontSize: 13, color: Colors.black54),
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -716,6 +791,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 style: const TextStyle(
                     fontWeight: FontWeight.w600, fontSize: 18, color: Colors.black87),
               ),
+              // Show path as subtitle when searching
               subtitle: Text(
                 r.fullPath.replaceAll('_folder', ''),
                 style: const TextStyle(fontSize: 13, color: Colors.black54),
@@ -729,7 +805,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
                 tooltip: 'Download',
                 onPressed: () {
-                  // FIX: Use correct file path for download
                   _downloadFile(currentPath.isEmpty ? r.file.name : '$currentPath/${r.file.name}', r.file.name);
                 },
               ),
@@ -758,7 +833,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
     // Only show "empty" if not loading and after items are fetched
     if (folders.isEmpty && files.isEmpty) {
-      return const Center(child: Text('This folder is empty.', style: TextStyle(fontSize: 18, color: Colors.grey)));
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 40),
+          child: Text('This folder is empty.', style: TextStyle(fontSize: 18, color: Colors.grey)),
+        ),
+      );
     }
 
     final filteredFolders = searchQuery.isEmpty
@@ -802,6 +882,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           color: Colors.black87,
                           letterSpacing: 0.2),
                     ),
+                    // Do NOT show subtitle (path) when browsing
+                    subtitle: null,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -882,10 +964,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   fontSize: 18,
                   color: Colors.black87),
             ),
-            subtitle: Text(
-              (currentPath.isEmpty ? f.name : '$currentPath/${f.name}').replaceAll('_folder', ''),
-              style: const TextStyle(fontSize: 13, color: Colors.black54),
-            ),
+            // Do NOT show subtitle (path) when browsing
+            subtitle: null,
             selected: _selectedItems.contains(f),
             onTap: () => _onTapItem(f),
             onLongPress: () => _onLongPressItem(f),
@@ -895,7 +975,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
               tooltip: 'Download',
               onPressed: () {
-                // FIX: Use correct file path for download
                 _downloadFile(currentPath.isEmpty ? f.name : '$currentPath/${f.name}', f.name);
               },
             ),
@@ -1702,125 +1781,130 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             ),
             body: Stack(
               children: [
-                Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+                AnimatedOpacity(
+                  opacity: 1,
+                  duration: const Duration(milliseconds: 400),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
                     ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
-                    child: Column(
-                      children: [
-                        _buildSearchBar(),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(28),
-                            child: Container(
-                              color: Colors.white.withOpacity(0.10),
-                              child: NotificationListener<OverscrollIndicatorNotification>(
-                                onNotification: (overscroll) {
-                                  overscroll.disallowIndicator();
-                                  return false;
-                                },
-                                child: RefreshIndicator(
-                                  onRefresh: () async {
-                                    await _loadFolder(currentPath);
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+                      child: Column(
+                        children: [
+                          _buildSearchBar(),
+                          const SizedBox(height: 8),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(28),
+                              child: Container(
+                                color: Colors.white.withOpacity(0.10),
+                                child: NotificationListener<OverscrollIndicatorNotification>(
+                                  onNotification: (overscroll) {
+                                    overscroll.disallowIndicator();
+                                    return false;
                                   },
-                                  child: GestureDetector(
-                                    onVerticalDragEnd: (details) async {
-                                      if (details.primaryVelocity != null && details.primaryVelocity! < -200) {
-                                        await _loadFolder(currentPath);
-                                      }
+                                  child: RefreshIndicator(
+                                    onRefresh: () async {
+                                      await _loadFolder(currentPath);
                                     },
-                                    child: _buildList(),
+                                    child: GestureDetector(
+                                      onVerticalDragEnd: (details) async {
+                                        if (details.primaryVelocity != null && details.primaryVelocity! < -200) {
+                                          await _loadFolder(currentPath);
+                                        }
+                                      },
+                                      child: _buildList(),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
                 // --- Download progress bar at bottom ---
-                if (_downloading || _downloadError != null || _downloadSavePath != null)
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: Material(
-                      elevation: 12,
-                      color: Colors.white,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_downloading)
-                              Column(
-                                children: [
-                                  Text(
-                                    'Downloading ${_downloadFileName ?? ''}...',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  LinearProgressIndicator(
-                                    value: _downloadProgress,
-                                    minHeight: 8,
-                                    backgroundColor: Colors.blue.shade100,
-                                    color: Colors.blue,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text('${(_downloadProgress * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 16)),
-                                ],
-                              ),
-                            if (!_downloading && _downloadError != null)
-                              Column(
-                                children: [
-                                  const Icon(Icons.error, color: Colors.red, size: 32),
-                                  const SizedBox(height: 10),
-                                  Text(_downloadError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                  TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _downloadError = null;
-                                        _downloadSavePath = null;
-                                        _downloadFileName = null;
-                                      });
-                                    },
-                                    child: const Text('Close'),
-                                  ),
-                                ],
-                              ),
-                            if (!_downloading && _downloadError == null && _downloadSavePath != null)
-                              Column(
-                                children: [
-                                  const Icon(Icons.check_circle, color: Colors.green, size: 32),
-                                  const SizedBox(height: 10),
-                                  Text('Downloaded to $_downloadSavePath', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                                  TextButton(
-                                    onPressed: () {
-                                      setState(() {
-                                        _downloadSavePath = null;
-                                        _downloadFileName = null;
-                                      });
-                                    },
-                                    child: const Text('Close'),
-                                  ),
-                                ],
-                              ),
-                          ],
-                        ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
+                  left: 0,
+                  right: 0,
+                  bottom: (_downloading || _downloadError != null || _downloadSavePath != null) ? 0 : -120,
+                  child: Material(
+                    elevation: 12,
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_downloading)
+                            Column(
+                              children: [
+                                Text(
+                                  'Downloading ${_downloadFileName ?? ''}...',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                ),
+                                const SizedBox(height: 10),
+                                LinearProgressIndicator(
+                                  value: _downloadProgress,
+                                  minHeight: 8,
+                                  backgroundColor: Colors.blue.shade100,
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                const SizedBox(height: 8),
+                                Text('${(_downloadProgress * 100).toStringAsFixed(0)}%', style: const TextStyle(fontSize: 16)),
+                              ],
+                            ),
+                          if (!_downloading && _downloadError != null)
+                            Column(
+                              children: [
+                                const Icon(Icons.error, color: Colors.red, size: 32),
+                                const SizedBox(height: 10),
+                                Text(_downloadError!, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _downloadError = null;
+                                      _downloadSavePath = null;
+                                      _downloadFileName = null;
+                                    });
+                                  },
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                          if (!_downloading && _downloadError == null && _downloadSavePath != null)
+                            Column(
+                              children: [
+                                const Icon(Icons.check_circle, color: Colors.green, size: 32),
+                                const SizedBox(height: 10),
+                                Text('Downloaded to $_downloadSavePath', style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                                TextButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _downloadSavePath = null;
+                                      _downloadFileName = null;
+                                    });
+                                  },
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                        ],
                       ),
                     ),
                   ),
+                ),
               ],
             ),
           ),

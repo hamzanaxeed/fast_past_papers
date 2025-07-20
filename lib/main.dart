@@ -24,7 +24,9 @@ void main() async {
 
   runApp(
     MaterialApp(
-      home: hasSeenIntro ? const MyApp() : const into_Screen(),
+      home: hasSeenIntro
+          ? const MyApp()
+          : const into_Screen(),
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
@@ -121,6 +123,67 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  static const int currentAppVersion = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _storeCurrentVersion();
+    // Check version on app open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkVersionAndShowAlert(context);
+    });
+  }
+
+  Future<void> _storeCurrentVersion() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('currentAppVersion', currentAppVersion);
+  }
+
+  Future<int?> _fetchLatestVersion() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('version')
+          .select('current_Version')
+          .order('current_Version', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (response != null && response['current_Version'] != null) {
+        print('Latest version fetched: ${response['current_Version']}');
+        return response['current_Version'] as int;
+      }
+    } catch (e) {
+      print("Error fetching version: $e");
+    }
+    return null;
+  }
+
+  Future<void> _checkVersionAndShowAlert(BuildContext context) async {
+    final latestVersion = await _fetchLatestVersion();
+
+    if (latestVersion != null && latestVersion > currentAppVersion) {
+      // ignore: use_build_context_synchronously
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Update Required'),
+          content: const Text(
+              'This version is not the latest. Please update the app for a seamless experience.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -230,7 +293,12 @@ class _MyAppState extends State<MyApp> {
                         logUserEvent('Intro Screen Opened');
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const into_Screen()),
+                          PageRouteBuilder(
+                            pageBuilder: (_, __, ___) => const into_Screen(),
+                            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                              return FadeTransition(opacity: animation, child: child);
+                            },
+                          ),
                         );
                       },
                       tooltip: 'View Intro Screen',
