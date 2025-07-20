@@ -223,9 +223,9 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Editors', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1976D2),
+        backgroundColor: Colors.deepPurple,
         iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 2,
+        elevation: 4,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -237,7 +237,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+            colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -268,7 +268,7 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
                     final count = snapshot.data?.length ?? 0;
                     return Chip(
                       label: Text('Total: $count'),
-                      backgroundColor: Colors.blue.shade100,
+                      backgroundColor: Colors.deepPurple.shade100,
                       labelStyle: const TextStyle(fontWeight: FontWeight.w600),
                     );
                   },
@@ -305,42 +305,41 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
                         margin: const EdgeInsets.symmetric(vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(18),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.grey.shade300,
-                              blurRadius: 6,
+                              color: Colors.deepPurple.withOpacity(0.08),
+                              blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                          child:ListTile(
-                            dense: true,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                            leading: const CircleAvatar(
-                              radius: 18,
-                              backgroundColor: Color(0xFF1976D2),
-                              child: Icon(Icons.person, color: Colors.white, size: 18),
+                        child: ListTile(
+                          dense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                          leading: const CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Colors.deepPurple,
+                            child: Icon(Icons.person, color: Colors.white, size: 18),
+                          ),
+                          title: Text(
+                            email,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                              color: Colors.black87,
                             ),
-                            title: Text(
-                              email,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
-                                color: Colors.black87,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.red),
-                              tooltip: "Delete Editor",
-                              splashRadius: 20,
-                              onPressed: () => _showDeleteEditorDialog(email),
-                            ),
-                            horizontalTitleGap: 8, // Reduce gap between avatar and title
-                            minLeadingWidth: 0,    // Reduce default spacing if needed
-                          )
-
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red),
+                            tooltip: "Delete Editor",
+                            splashRadius: 20,
+                            onPressed: () => _showDeleteEditorDialog(email),
+                          ),
+                          horizontalTitleGap: 8, // Reduce gap between avatar and title
+                          minLeadingWidth: 0,    // Reduce default spacing if needed
+                        )
                       );
                     },
                   );

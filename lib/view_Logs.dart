@@ -237,9 +237,9 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('User Logs', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF1976D2),
+        backgroundColor: Colors.deepPurple,
         iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 2,
+        elevation: 4,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
@@ -255,7 +255,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+            colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -274,10 +274,10 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
                       icon: const Icon(Icons.login),
                       label: const Text('Login Log'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _selectedLogType == LogType.login ? Colors.blue : Colors.grey[200],
+                        backgroundColor: _selectedLogType == LogType.login ? Colors.deepPurple : Colors.grey[200],
                         foregroundColor: _selectedLogType == LogType.login ? Colors.white : Colors.black87,
                         elevation: _selectedLogType == LogType.login ? 2 : 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
@@ -291,7 +291,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
                         backgroundColor: _selectedLogType == LogType.edit ? Colors.deepPurple : Colors.grey[200],
                         foregroundColor: _selectedLogType == LogType.edit ? Colors.white : Colors.black87,
                         elevation: _selectedLogType == LogType.edit ? 2 : 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                         textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                       ),
@@ -385,7 +385,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
                                   Icon(
                                     _selectedLogType == LogType.login ? Icons.list_alt : Icons.edit_note,
                                     size: 18,
-                                    color: _selectedLogType == LogType.login ? Color(0xFF1976D2) : Colors.deepPurple,
+                                    color: Colors.deepPurple,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
@@ -394,7 +394,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
                                   ),
                                 ],
                               ),
-                              backgroundColor: Colors.blue.shade50,
+                              backgroundColor: Colors.deepPurple.shade50,
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             ),
                             const SizedBox(width: 10),

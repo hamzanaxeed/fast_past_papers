@@ -173,44 +173,44 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      // Move "Calculate SGPA" to floatingActionButton and "Add Subject" as a regular button
-      floatingActionButton: ElevatedButton.icon(
-        onPressed: _calculateSGPA,
-        icon: const Icon(Icons.calculate),
-        label: const Text("Calculate SGPA"),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 6,
-        ),
-      ),
-      appBar: AppBar(
-        title: const Text("SGPA Calculator"),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
-      ),
-      body: Stack(
-        children: [
-          // Gradient background that covers the whole screen
-          const Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+    return Stack(
+      children: [
+        // Gradient background that covers the whole screen, including behind the app bar
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
           ),
-          SafeArea(
+        ),
+        Scaffold(
+          extendBodyBehindAppBar: true,
+          backgroundColor: Colors.transparent,
+          floatingActionButton: ElevatedButton.icon(
+            onPressed: _calculateSGPA,
+            icon: const Icon(Icons.calculate),
+            label: const Text("Calculate SGPA"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 6,
+            ),
+          ),
+          appBar: AppBar(
+            title: const Text("SGPA Calculator"),
+            centerTitle: true,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: Colors.white,
+          ),
+          body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -222,7 +222,6 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
                   const SizedBox(height: 18),
                   ...List.generate(_subjects.length, _buildSubjectTile),
                   const SizedBox(height: 10),
-                  // Improved "Add Subject" button with full width and better style
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -253,8 +252,8 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

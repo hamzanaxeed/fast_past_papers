@@ -587,21 +587,21 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     return acc;
   }
 
-  // Improved card decoration for modern look
+  // Update card decoration to match OptionsScreen
   BoxDecoration _cardDecoration({Color? color}) => BoxDecoration(
         color: color ?? Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.blue.withOpacity(0.08),
-            blurRadius: 16,
+            color: Colors.deepPurple.withOpacity(0.10),
+            blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
-        border: Border.all(color: Colors.blue.withOpacity(0.08), width: 1),
+        border: Border.all(color: Colors.deepPurple.withOpacity(0.08), width: 1),
       );
 
-  // Improved search bar using synchronous cache for instant search
+  // Update search bar to match theme
   Widget _buildSearchBar() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -609,11 +609,11 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         duration: const Duration(milliseconds: 250),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.blue.withOpacity(0.10),
-              blurRadius: 14,
+              color: Colors.deepPurple.withOpacity(0.10),
+              blurRadius: 12,
               offset: const Offset(0, 2),
             ),
           ],
@@ -622,12 +622,12 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           controller: _searchController,
           decoration: InputDecoration(
             hintText: '🔍 Search files or folders...',
-            prefixIcon: const Icon(Icons.search, color: Color(0xFF1976D2)),
+            prefixIcon: const Icon(Icons.search, color: Colors.deepPurple),
             filled: true,
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               borderSide: BorderSide.none,
             ),
           ),
@@ -653,7 +653,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     );
   }
 
-  // Improved list view with more spacing and hover effect
+  // Update list view for folders/files to match theme
   Widget _buildList() {
     // Show loading only if cache is building and no results yet
     if ((_globalSearchLoading || _buildingCache) && searchQuery.isNotEmpty && _globalSearchResults.isEmpty) {
@@ -679,25 +679,24 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               final count = countSnapshot.data;
               return Container(
                 margin: const EdgeInsets.symmetric(vertical: 10),
-                decoration: _cardDecoration(color: Colors.teal.withOpacity(0.10)),
+                decoration: _cardDecoration(color: Colors.deepPurple.withOpacity(0.08)),
                 child: ListTile(
                   leading: Container(
                     decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(0.18),
+                      color: Colors.deepPurple.withOpacity(0.40),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.all(6),
-                    child: const Icon(Icons.folder, color: Colors.amber, size: 32),
+                    child: const Icon(Icons.folder, color: Colors.white, size: 32),
                   ),
                   title: Text(
                     r.file.name.replaceAll('/', '').replaceAll('_folder', ''),
                     style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87, letterSpacing: 0.2),
+                        fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white, letterSpacing: 0.2),
                   ),
-                  // Show path as subtitle when searching
                   subtitle: Text(
                     r.fullPath.replaceAll('_folder', ''),
-                    style: const TextStyle(fontSize: 13, color: Colors.black54),
+                    style: const TextStyle(fontSize: 13, color: Colors.white70),
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -711,14 +710,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                       else
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
+                            color: Colors.deepPurple.shade50,
                             borderRadius: BorderRadius.circular(8),
                           ),
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           child: Text(
                             '$count',
                             style: const TextStyle(
-                              color: Color(0xFF1976D2),
+                              color: Colors.deepPurple,
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                             ),
@@ -729,8 +728,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                   selected: _selectedItems.contains(r.file),
                   onTap: () => _onTapItem(r.file),
                   onLongPress: () => _onLongPressItem(r.file),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  hoverColor: Colors.amber.withOpacity(0.13),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  hoverColor: Colors.deepPurple.withOpacity(0.13),
                 ),
               );
             },
@@ -740,50 +739,49 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
             decoration: _cardDecoration(),
             child: ListTile(
               leading: Padding(
-                padding: const EdgeInsets.only(right: 12), // Increased spacing between icon and name
+                padding: const EdgeInsets.only(right: 12),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.10),
+                    color: Colors.deepPurple.withOpacity(0.40),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   padding: const EdgeInsets.all(6),
                   child: _isImage(r.file.name)
-                      ? const Icon(Icons.image, color: Colors.blue, size: 28)
+                      ? const Icon(Icons.image, color: Colors.white, size: 28)
                       : _isPdf(r.file.name)
-                          ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
+                          ? const Icon(Icons.picture_as_pdf, color: Colors.white, size: 28)
                           : _isPptx(r.file.name)
-                              ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
+                              ? const Icon(Icons.slideshow, color: Colors.white, size: 28)
                               : _isDocx(r.file.name)
-                                  ? const Icon(Icons.description, color: Colors.indigo, size: 28)
+                                  ? const Icon(Icons.description, color: Colors.white, size: 28)
                                   : _isXlsx(r.file.name)
-                                      ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
+                                      ? const Icon(Icons.table_chart, color: Colors.white, size: 28)
                                       : _isTxt(r.file.name)
-                                          ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
-                                          : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
+                                          ? const Icon(Icons.text_snippet, color: Colors.white, size: 28)
+                                          : const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
                 ),
               ),
               title: Padding(
-                padding: const EdgeInsets.only(right: 12), // Space between name and download button
+                padding: const EdgeInsets.only(right: 12),
                 child: Text(
                   r.file.name,
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 18, color: Colors.black87),
+                      fontWeight: FontWeight.w600, fontSize: 18, color: Colors.white),
                 ),
               ),
-              // Show path as subtitle when searching
               subtitle: Text(
                 r.fullPath.replaceAll('_folder', ''),
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
+                style: const TextStyle(fontSize: 13, color: Colors.white70),
               ),
               selected: _selectedItems.contains(r.file),
               onTap: () => _onTapItem(r.file),
               onLongPress: () => _onLongPressItem(r.file),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              hoverColor: Colors.blue.withOpacity(0.07),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              hoverColor: Colors.deepPurple.withOpacity(0.07),
               trailing: Padding(
-                padding: const EdgeInsets.only(left: 8), // Space between name and download button
+                padding: const EdgeInsets.only(left: 8),
                 child: IconButton(
-                  icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
+                  icon: const Icon(Icons.download_rounded, color: Colors.deepPurple, size: 26),
                   tooltip: 'Download',
                   onPressed: () {
                     _downloadFile(currentPath.isEmpty ? r.file.name : '$currentPath/${r.file.name}', r.file.name);
@@ -830,6 +828,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         ? files
         : files.where((f) => f.name.toLowerCase().contains(searchQuery)).toList();
 
+    // Update folder/file cards for consistency
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       children: [
@@ -842,29 +841,27 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               future: _getFolderItemCount(folderPath),
               builder: (context, countSnapshot) {
                 final count = countSnapshot.data;
-                // --- Check if this is a second-level folder (folder/subfolder) ---
                 final isSecondLevel = currentPath.split('/').where((e) => e.isNotEmpty).length == 1;
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: _cardDecoration(color: Colors.teal.withOpacity(0.10)),
+                  decoration: _cardDecoration(color: Colors.deepPurple.withOpacity(0.08)),
                   child: ListTile(
                     leading: Container(
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.18),
+                        color: Colors.deepPurple.withOpacity(0.40),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       padding: const EdgeInsets.all(6),
-                      child: const Icon(Icons.folder, color: Colors.amber, size: 32),
+                      child: const Icon(Icons.folder, color: Colors.white, size: 32),
                     ),
                     title: Text(
                       f.name.replaceAll('/', '').replaceAll('_folder', ''),
-                      style: TextStyle(
+                      style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 20,
-                          color: Colors.black87,
+                          color: Colors.white,
                           letterSpacing: 0.2),
                     ),
-                    // Do NOT show subtitle (path) when browsing
                     subtitle: null,
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -878,89 +875,77 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                         else
                           Container(
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
+                              color: Colors.deepPurple.shade50,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                             child: Text(
                               '$count',
                               style: const TextStyle(
-                                color: Color(0xFF1976D2),
+                                color: Colors.deepPurple,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
                               ),
                             ),
                           ),
-                        // --- Upload Here button removed ---
-                        // if (isSecondLevel)
-                        //   Padding(
-                        //     padding: const EdgeInsets.only(left: 8.0),
-                        //     child: IconButton(
-                        //       icon: const Icon(Icons.upload_file, color: Color(0xFF1976D2)),
-                        //       tooltip: 'Upload Here',
-                        //       onPressed: () => _uploadFileToPath(folderPath),
-                        //     ),
-                        //   ),
                       ],
                     ),
                     selected: _selectedItems.contains(f),
                     onTap: () => _onTapItem(f),
                     onLongPress: () => _onLongPressItem(f),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    hoverColor: Colors.amber.withOpacity(0.10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    hoverColor: Colors.deepPurple.withOpacity(0.10),
                   ),
                 );
               },
             );
           },
         )),
-        // --- FIX: Remove FutureBuilder for files, use direct mapping ---
         ...filteredFiles.map((f) => Container(
           margin: const EdgeInsets.symmetric(vertical: 10),
           decoration: _cardDecoration(),
           child: ListTile(
             leading: Padding(
-              padding: const EdgeInsets.only(right: 12), // Increased spacing between icon and name
+              padding: const EdgeInsets.only(right: 12),
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.10),
+                  color: Colors.deepPurple.withOpacity(0.40),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 padding: const EdgeInsets.all(6),
                 child: _isImage(f.name)
-                    ? const Icon(Icons.image, color: Colors.blue, size: 28)
+                    ? const Icon(Icons.image, color: Colors.white, size: 28)
                     : _isPdf(f.name)
-                        ? const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28)
+                        ? const Icon(Icons.picture_as_pdf, color: Colors.white, size: 28)
                         : _isPptx(f.name)
-                            ? const Icon(Icons.slideshow, color: Colors.orange, size: 28)
+                            ? const Icon(Icons.slideshow, color: Colors.white, size: 28)
                             : _isDocx(f.name)
-                                ? const Icon(Icons.description, color: Colors.indigo, size: 28)
+                                ? const Icon(Icons.description, color: Colors.white, size: 28)
                                 : _isXlsx(f.name)
-                                    ? const Icon(Icons.table_chart, color: Colors.green, size: 28)
+                                    ? const Icon(Icons.table_chart, color: Colors.white, size: 28)
                                     : _isTxt(f.name)
-                                        ? const Icon(Icons.text_snippet, color: Colors.grey, size: 28)
-                                        : const Icon(Icons.insert_drive_file, color: Colors.grey, size: 28),
+                                        ? const Icon(Icons.text_snippet, color: Colors.white, size: 28)
+                                        : const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
               ),
             ),
             title: Padding(
-              padding: const EdgeInsets.only(right: 12), // Space between name and download button
+              padding: const EdgeInsets.only(right: 12),
               child: Text(
                 f.name,
                 style: const TextStyle(
                     fontWeight: FontWeight.w600,
                     fontSize: 18,
-                    color: Colors.black87),
+                    color: Colors.white),
               ),
             ),
-            // Do NOT show subtitle (path) when browsing
             subtitle: null,
             selected: _selectedItems.contains(f),
             onTap: () => _onTapItem(f),
             onLongPress: () => _onLongPressItem(f),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-            hoverColor: Colors.blue.withOpacity(0.07),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            hoverColor: Colors.deepPurple.withOpacity(0.07),
             trailing: IconButton(
-              icon: const Icon(Icons.download_rounded, color: Color(0xFF1976D2), size: 26),
+              icon: const Icon(Icons.download_rounded, color: Colors.deepPurple, size: 26),
               tooltip: 'Download',
               onPressed: () {
                 _downloadFile(currentPath.isEmpty ? f.name : '$currentPath/${f.name}', f.name);
@@ -1580,15 +1565,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                 builder: (context, adminSnapshot) {
                   final admin = adminSnapshot.data ?? false;
                   return Container(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1976D2), Color(0xFF42A5F5)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: const BorderRadius.vertical(bottom: Radius.circular(32)),
+                    decoration: const BoxDecoration(
+                      color: Colors.deepPurple, // Solid color, no rounded corners
                       boxShadow: [
-                        BoxShadow(color: Colors.blue.withOpacity(0.10), blurRadius: 16, offset: Offset(0, 4))
+                        BoxShadow(
+                          color: Colors.deepPurple,
+                          blurRadius: 12,
+                          offset: Offset(0, 4),
+                        ),
                       ],
                     ),
                     child: SafeArea(
@@ -1600,7 +1584,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                               IconButton(
                                 icon: const Icon(Icons.close, color: Colors.white, size: 28),
                                 onPressed: _clearSelection,
-                            ),
+                              ),
                             if (!_selectionMode && currentPath.isNotEmpty)
                               IconButton(
                                 icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
@@ -1614,7 +1598,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                       parts.isEmpty ? '' : parts.join('/') + '/';
                                   _loadFolder(parentPath);
                                 },
-                            ),
+                              ),
                             if (!_selectionMode && currentPath.isEmpty) const SizedBox(width: 14),
                             Expanded(
                               child: Text(
@@ -1622,10 +1606,17 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                     ? '${_selectedItems.length} selected'
                                     : displayPath,
                                 style: const TextStyle(
-                                  color: Colors.white,
+                                  color: Colors.white, // White text for app bar
                                   fontWeight: FontWeight.bold,
                                   fontSize: 24,
                                   letterSpacing: 1.1,
+                                  shadows: [
+                                    Shadow(
+                                      color: Colors.black26,
+                                      blurRadius: 8,
+                                      offset: Offset(1, 2),
+                                    ),
+                                  ],
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1635,7 +1626,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                 icon: const Icon(Icons.delete, color: Colors.white, size: 28),
                                 tooltip: 'Delete Selected',
                                 onPressed: _selectedItems.isEmpty ? null : _deleteSelectedItems,
-                            ),
+                              ),
                             if (!_selectionMode) ...[
                               // --- REMOVE: Direct Feedback and Logout buttons ---
                               // if (!admin) ...[
@@ -1780,7 +1771,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                   child: Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+                        colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -1793,7 +1784,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                           const SizedBox(height: 8),
                           Expanded(
                             child: ClipRRect(
-                              borderRadius: BorderRadius.circular(28),
+                              borderRadius: BorderRadius.circular(24),
                               child: Container(
                                 color: Colors.white.withOpacity(0.10),
                                 child: NotificationListener<OverscrollIndicatorNotification>(

@@ -11,11 +11,11 @@ class EmailAuthScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FAF9),
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+            colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -30,7 +30,7 @@ class EmailAuthScreen extends StatelessWidget {
                   tag: 'past_paper_icon',
                   child: CircleAvatar(
                     radius: 54,
-                    backgroundColor: Colors.blue.withOpacity(0.18),
+                    backgroundColor: Colors.deepPurple.withOpacity(0.18),
                     child: Image.asset('assets/logo.jpg', width: 70, height: 70),
                   ),
                 ),
@@ -39,10 +39,10 @@ class EmailAuthScreen extends StatelessWidget {
                   elevation: 18,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(32),
+                    borderRadius: BorderRadius.circular(22),
                   ),
                   color: Colors.white,
-                  shadowColor: Colors.blue.withOpacity(0.12),
+                  shadowColor: Colors.deepPurple.withOpacity(0.12),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
                     child: Column(
@@ -53,7 +53,7 @@ class EmailAuthScreen extends StatelessWidget {
                           style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1976D2),
+                            color: Colors.deepPurple,
                             letterSpacing: 0.7,
                           ),
                           textAlign: TextAlign.center,
@@ -94,7 +94,7 @@ class EmailAuthScreen extends StatelessWidget {
                           child: const Text(
                             "Don't have an account? Sign Up",
                             style: TextStyle(
-                              color: Color(0xFF1976D2),
+                              color: Colors.deepPurple,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -348,12 +348,12 @@ class _LoginFormState extends State<_LoginForm> {
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                backgroundColor: const Color(0xFF46C2CB),
+                backgroundColor: Colors.deepPurple,
                 foregroundColor: Colors.white,
                 textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                elevation: 3,
+                elevation: 5,
               ),
               onPressed: _loading
                   ? null
@@ -536,12 +536,12 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
               ),
               backgroundColor: Colors.red.shade400,
               foregroundColor: Colors.white,
               textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              elevation: 3,
+              elevation: 5,
             ),
             onPressed: _loading ? null : _signInWithGoogle,
           ),
@@ -554,12 +554,12 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
               ),
-              backgroundColor: const Color(0xFF46C2CB),
+              backgroundColor: Colors.deepPurple,
               foregroundColor: Colors.white,
               textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              elevation: 3,
+              elevation: 5,
             ),
             onPressed: _loading ? null : _signInAnonymously,
           ),
@@ -645,11 +645,11 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7FAF9),
+      backgroundColor: Colors.transparent,
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFE3F2FD), Color(0xFFF7FAF9)],
+            colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -664,7 +664,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   tag: 'past_paper_icon',
                   child: CircleAvatar(
                     radius: 54,
-                    backgroundColor: Colors.blue.withOpacity(0.18),
+                    backgroundColor: Colors.deepPurple.withOpacity(0.18),
                     child: Image.asset('assets/logo.jpg', width: 70, height: 70),
                   ),
                 ),
@@ -673,10 +673,10 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   elevation: 18,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(32),
+                    borderRadius: BorderRadius.circular(22),
                   ),
                   color: Colors.white,
-                  shadowColor: Colors.blue.withOpacity(0.12),
+                  shadowColor: Colors.deepPurple.withOpacity(0.12),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
                     child: Form(
@@ -689,7 +689,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                             style: TextStyle(
                               fontSize: 24,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1976D2),
+                              color: Colors.deepPurple,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -819,13 +819,13 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                               style: ElevatedButton.styleFrom(
                                 padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
-                                backgroundColor: Colors.teal.shade700,
+                                backgroundColor: Colors.deepPurple,
                                 foregroundColor: Colors.white,
                                 textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                                 elevation: 5,
-                                shadowColor: Colors.tealAccent,
+                                shadowColor: Colors.deepPurpleAccent,
                               ),
                               onPressed: _loading
                                   ? null
@@ -859,7 +859,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                             child: Text(
                               "Already have an account? Login",
                               style: TextStyle(
-                                color: Colors.teal.shade700,
+                                color: Colors.deepPurple,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),

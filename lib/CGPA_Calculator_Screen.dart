@@ -242,43 +242,44 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      floatingActionButton: ElevatedButton.icon(
-        onPressed: _calculateCGPA,
-        icon: const Icon(Icons.calculate),
-        label: const Text("Calculate CGPA"),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
-          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          elevation: 6,
-        ),
-      ),
-      appBar: AppBar(
-        title: const Text("CGPA Calculator"),
-        centerTitle: true,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.white,
-      ),
-      body: Stack(
-        children: [
-          // Gradient background that covers the whole screen
-          const Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+    return Stack(
+      children: [
+        // Gradient background that covers the whole screen, including behind the app bar
+        const Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
           ),
-          SafeArea(
+        ),
+        Scaffold(
+          extendBodyBehindAppBar: true,
+          backgroundColor: Colors.transparent,
+          floatingActionButton: ElevatedButton.icon(
+            onPressed: _calculateCGPA,
+            icon: const Icon(Icons.calculate),
+            label: const Text("Calculate CGPA"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              elevation: 6,
+            ),
+          ),
+          appBar: AppBar(
+            title: const Text("CGPA Calculator"),
+            centerTitle: true,
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            foregroundColor: Colors.white,
+          ),
+          body: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(18),
               child: Column(
@@ -320,8 +321,8 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
               ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

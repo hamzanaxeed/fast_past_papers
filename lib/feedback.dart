@@ -22,10 +22,10 @@ void showFeedbackDialog(BuildContext context) {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.feedback, color: Color(0xFF1976D2), size: 48),
+            Icon(Icons.feedback, color: Colors.deepPurple, size: 48),
             const SizedBox(height: 12),
             Text('We value your feedback!',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1976D2), letterSpacing: 0.5),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.deepPurple, letterSpacing: 0.5),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -51,10 +51,10 @@ void showFeedbackDialog(BuildContext context) {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    icon: const Icon(Icons.close, color: Color(0xFF1976D2)),
-                    label: const Text('Cancel', style: TextStyle(color: Color(0xFF1976D2))),
+                    icon: const Icon(Icons.close, color: Colors.deepPurple),
+                    label: const Text('Cancel', style: TextStyle(color: Colors.deepPurple)),
                     style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Color(0xFF1976D2), width: 1.5),
+                      side: const BorderSide(color: Colors.deepPurple, width: 1.5),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
@@ -71,7 +71,7 @@ void showFeedbackDialog(BuildContext context) {
                     icon: const Icon(Icons.send, color: Colors.white),
                     label: const Text('Submit', style: TextStyle(color: Colors.white)),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1976D2),
+                      backgroundColor: Colors.deepPurple,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -339,7 +339,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
       builder: (context, scrollController) {
         return Container(
           decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
+            color: Colors.white,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
@@ -356,7 +356,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
               const SizedBox(height: 16),
               const Text(
                 'User Feedbacks',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1976D2)),
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.deepPurple),
               ),
               const SizedBox(height: 8),
               Padding(
@@ -371,7 +371,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                       onSelected: (selected) {
                         if (showRead) setState(() => showRead = false);
                       },
-                      selectedColor: const Color(0xFF1976D2),
+                      selectedColor: Colors.deepPurple,
                       labelStyle: TextStyle(color: !showRead ? Colors.white : Colors.black),
                     ),
                     const SizedBox(width: 8),
@@ -381,7 +381,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                       onSelected: (selected) {
                         if (!showRead) setState(() => showRead = true);
                       },
-                      selectedColor: const Color(0xFF1976D2),
+                      selectedColor: Colors.deepPurple,
                       labelStyle: TextStyle(color: showRead ? Colors.white : Colors.black),
                     ),
                   ],
