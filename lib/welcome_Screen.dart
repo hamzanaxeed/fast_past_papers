@@ -71,6 +71,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   // Synchronous cache for all files/folders for search
   List<_SearchResult> _allFilesCache = [];
 
+  // Add this flag to track cache building
+  bool _buildingCache = false;
+
   // Always fetch editor emails before checking roles
   Future<void> fetchEditorEmails() async {
     try {
@@ -121,13 +124,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     fetchEditorEmails().then((_) {
       _loadFolder('');
     });
-    // Populate the synchronous cache at app start
-    _cachedFilesFuture = _fetchAllFilesAndFolders('', 0, 4, 2000);
-    _cachedFilesFuture.then((list) {
-      setState(() {
-        _allFilesCache = list;
-      });
-    });
+    _buildSearchCache();
     // Listen for real-time changes in Editors table
     _editorSub = Supabase.instance.client
         .from('Editors')
@@ -144,6 +141,21 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       });
       print('Realtime update: editor emails = $editor_Emails');
     });
+  }
+
+  // Build the search cache once at app start or after changes
+  Future<void> _buildSearchCache() async {
+    setState(() {
+      _buildingCache = true;
+    });
+    _cachedFilesFuture = _fetchAllFilesAndFolders('', 0, 2, 500);
+    final list = await _cachedFilesFuture;
+    if (mounted) {
+      setState(() {
+        _allFilesCache = list;
+        _buildingCache = false;
+      });
+    }
   }
 
   @override
@@ -188,6 +200,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       } else {
         logUserEvent('Opened Root Folder');
       }
+      // Rebuild cache after folder load (only if file/folder changed)
+      await _buildSearchCache();
     } catch (e) {
       setState(() {
         error = 'Failed to load folder: $e';
@@ -355,6 +369,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
       _folderCounts.clear(); // Clear cache before refresh
       await _loadFolder(currentPath); // Ensure refresh after rename
+      await _buildSearchCache(); // <-- Add this
     } catch (e) {
       setState(() {
         error = 'Failed to rename: $e';
@@ -437,6 +452,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         _clearSelection();
         _folderCounts.clear(); // Clear cache before refresh
         await _loadFolder(currentPath); // Ensure refresh after multi-delete
+        await _buildSearchCache(); // <-- Add this
       } catch (e) {
         print('DEBUG: Error during deletion: $e');
         setState(() {
@@ -593,26 +609,30 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             final query = value.trim().toLowerCase();
             setState(() {
               searchQuery = query;
-              _globalSearchLoading = query.isNotEmpty;
             });
 
-            // Only search if cache is loaded
-            if (query.isNotEmpty && _allFilesCache.isNotEmpty) {
-              final result = _allFilesCache.where((f) =>
-                f.file.name.toLowerCase().contains(query)
-              ).toList();
-
-              setState(() {
-                _globalSearchResults = result;
-                _globalSearchLoading = false;
-              });
-            } else if (query.isEmpty) {
+            if (query.isNotEmpty) {
+              if (_allFilesCache.isNotEmpty) {
+                final result = _allFilesCache.where((f) =>
+                  f.file.name.toLowerCase().contains(query) ||
+                  f.fullPath.toLowerCase().contains(query)
+                ).toList();
+                setState(() {
+                  _globalSearchResults = result;
+                  _globalSearchLoading = false;
+                });
+              } else {
+                setState(() {
+                  _globalSearchResults = [];
+                  _globalSearchLoading = true;
+                });
+              }
+            } else {
               setState(() {
                 _globalSearchResults = [];
                 _globalSearchLoading = false;
               });
             }
-            // If cache is not loaded, do not set _globalSearchResults yet
           },
         ),
       ),
@@ -635,17 +655,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         final result = _allFilesCache.where((f) =>
           f.file.name.toLowerCase().contains(searchQuery)
         ).toList();
-        // Do not show loading if there are no results, just show "No results found"
-        if (result.isNotEmpty) {
-          // Update results and rebuild
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            setState(() {
-              _globalSearchResults = result;
-            });
+        // Update results and rebuild
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          setState(() {
+            _globalSearchResults = result;
+            _globalSearchLoading = false; // <-- Ensure loading is stopped
           });
-          // Show nothing while updating (prevents infinite loading)
-          return const SizedBox.shrink();
-        }
+        });
+        // Show nothing while updating (prevents infinite loading)
+        return const SizedBox.shrink();
       }
       final folders = _globalSearchResults.where((r) => _isFolder(r.file)).toList();
       final files = _globalSearchResults.where((r) => !_isFolder(r.file)).toList();
@@ -1092,6 +1110,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
       _folderCounts.clear(); // Clear cache before refresh
       await _loadFolder(currentPath); // Ensure refresh after delete
+      await _buildSearchCache(); // <-- Add this
     } catch (e) {
       setState(() {
         error = 'Failed to delete: $e';
@@ -1292,8 +1311,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           .from('pastpapers')
           .upload(uploadPath, file,
               fileOptions: const FileOptions(upsert: true));
-      _folderCounts.clear(); // Clear cache before refresh
-      await _loadFolder(currentPath); // Ensure refresh after upload
+      _folderCounts.clear();
+      await _loadFolder(currentPath);
+      await _buildSearchCache(); // <-- Add this
       logUserEvent('Uploaded Image', details: uploadPath);
       // --- Log edit event for file creation (image) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
@@ -1308,8 +1328,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           .storage
           .from('pastpapers')
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
-      _folderCounts.clear(); // Clear cache before refresh
-      await _loadFolder(currentPath); // Ensure refresh after upload
+      _folderCounts.clear();
+      await _loadFolder(currentPath);
+      await _buildSearchCache(); // <-- Add this
       logUserEvent('Uploaded PDF', details: uploadPath);
       // --- Log edit event for file creation (pdf) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
@@ -1460,8 +1481,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           .from('pastpapers')
           .upload(uploadPath, file,
               fileOptions: const FileOptions(upsert: true));
-      _folderCounts.clear(); // Clear cache before refresh
-      await _loadFolder(currentPath); // Ensure refresh after upload
+      _folderCounts.clear();
+      await _loadFolder(currentPath);
+      await _buildSearchCache(); // <-- Add this
       logUserEvent('Uploaded Image', details: uploadPath);
       // --- Log edit event for file creation (image) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
@@ -1476,8 +1498,9 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
           .storage
           .from('pastpapers')
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
-      _folderCounts.clear(); // Clear cache before refresh
-      await _loadFolder(currentPath); // Ensure refresh after upload
+      _folderCounts.clear();
+      await _loadFolder(currentPath);
+      await _buildSearchCache(); // <-- Add this
       logUserEvent('Uploaded PDF', details: uploadPath);
       // --- Log edit event for file creation (pdf) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
@@ -1770,11 +1793,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                                   },
                                   child: RefreshIndicator(
                                     onRefresh: () async {
+                                      _folderCounts.clear(); // <-- Clear cached counts before refresh
                                       await _loadFolder(currentPath);
                                     },
                                     child: GestureDetector(
                                       onVerticalDragEnd: (details) async {
                                         if (details.primaryVelocity != null && details.primaryVelocity! < -200) {
+                                          _folderCounts.clear(); // <-- Clear cached counts before refresh
                                           await _loadFolder(currentPath);
                                         }
                                       },

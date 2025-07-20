@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:open_file/open_file.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart'; // For clipboard copy
 
 class OtherViewer extends StatefulWidget {
   final String url;
@@ -25,13 +26,37 @@ class _OtherViewerState extends State<OtherViewer> {
   bool _webViewReady = false;
   late final WebViewController _webViewController;
 
+  String? _textPreview;
+  bool _textLoading = false;
+  String? _textError;
+
+  // Supported for Google Docs Viewer
   bool get isSupportedForDocsViewer {
     final ext = widget.name.toLowerCase();
     return ext.endsWith('.pptx') ||
         ext.endsWith('.docx') ||
         ext.endsWith('.xlsx') ||
-        ext.endsWith('.txt');
+        ext.endsWith('.pdf');
   }
+
+  // Supported for in-app text preview
+  bool get isSupportedForTextPreview {
+    final ext = widget.name.toLowerCase();
+    return ext.endsWith('.csv') ||
+        ext.endsWith('.html') ||
+        ext.endsWith('.xml') ||
+        ext.endsWith('.json') ||
+        ext.endsWith('.md') ||
+        ext.endsWith('.txt') ||
+        ext.endsWith('.rtf');
+  }
+
+  // Supported for archive info
+  bool get isArchiveFile {
+    final ext = widget.name.toLowerCase();
+    return ext.endsWith('.zip') || ext.endsWith('.rar');
+  }
+
   bool get isHttps => widget.url.toLowerCase().startsWith('https://');
 
   @override
@@ -56,6 +81,39 @@ class _OtherViewerState extends State<OtherViewer> {
         ))
         ..loadRequest(Uri.parse(viewerUrl));
       _webViewReady = true;
+    } else if (isSupportedForTextPreview) {
+      _loadTextPreview();
+    }
+  }
+
+  Future<void> _loadTextPreview() async {
+    setState(() {
+      _textLoading = true;
+      _textError = null;
+      _textPreview = null;
+    });
+    try {
+      final response = await http.get(Uri.parse(widget.url));
+      if (response.statusCode == 200) {
+        // Limit preview to first 100 KB for performance
+        final text = response.body.length > 100000
+            ? response.body.substring(0, 100000) + '\n\n--- Preview truncated ---'
+            : response.body;
+        setState(() {
+          _textPreview = text;
+          _textLoading = false;
+        });
+      } else {
+        setState(() {
+          _textError = 'Failed to load preview.';
+          _textLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _textError = 'Error loading preview.';
+        _textLoading = false;
+      });
     }
   }
 
@@ -172,6 +230,7 @@ class _OtherViewerState extends State<OtherViewer> {
 
   @override
   Widget build(BuildContext context) {
+    // Google Docs Viewer preview
     if (isSupportedForDocsViewer && isHttps) {
       return Scaffold(
         appBar: AppBar(
@@ -246,6 +305,122 @@ class _OtherViewerState extends State<OtherViewer> {
       );
     }
 
+    // Text-based preview
+    if (isSupportedForTextPreview) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(widget.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          elevation: 2,
+          actions: [
+            if (_textPreview != null)
+              IconButton(
+                icon: const Icon(Icons.copy),
+                tooltip: 'Copy to clipboard',
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _textPreview!));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Copied to clipboard'), backgroundColor: Colors.green),
+                  );
+                },
+              ),
+            IconButton(
+              icon: const Icon(Icons.open_in_new),
+              tooltip: 'Open externally',
+              onPressed: _openInExternalViewer,
+            ),
+          ],
+        ),
+        body: _textLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _textError != null
+                ? Center(child: Text(_textError!, style: const TextStyle(color: Colors.red)))
+                : _textPreview != null
+                    ? Scrollbar(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: SelectableText(
+                            _textPreview!,
+                            style: const TextStyle(fontSize: 15, fontFamily: 'monospace'),
+                          ),
+                        ),
+                      )
+                    : const Center(child: Text('No preview available')),
+      );
+    }
+
+    // Archive file info
+    if (isArchiveFile) {
+      return Scaffold(
+        appBar: AppBar(
+          title: Text(widget.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          elevation: 2,
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.archive, size: 64, color: Colors.orange),
+                const SizedBox(height: 20),
+                Text(
+                  'Archive file (.zip/.rar)\nPreview not supported inside app.\nYou can download and open with an appropriate app.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16, color: Colors.black54),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  icon: _downloading
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.download_rounded),
+                  label: Text(_downloading
+                      ? 'Downloading... ${(_downloadProgress * 100).toStringAsFixed(0)}%'
+                      : 'Download & Open'),
+                  onPressed: _downloading ? null : _downloadAndOpenFile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                ),
+                if (_downloading)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: LinearProgressIndicator(
+                      value: _downloadProgress,
+                      minHeight: 8,
+                      backgroundColor: Colors.orange.shade100,
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                if (_downloadPath != null && !_downloading)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(
+                      'Saved to: $_downloadPath',
+                      style: const TextStyle(fontSize: 14, color: Colors.green),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                if (_error != null && !_downloading)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(fontSize: 14, color: Colors.red),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Fallback for unsupported formats
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.name, style: const TextStyle(fontWeight: FontWeight.bold)),
