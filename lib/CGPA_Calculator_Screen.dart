@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'feedback.dart';
 
 class CgpaCalculatorScreen extends StatefulWidget {
   const CgpaCalculatorScreen({Key? key}) : super(key: key);
@@ -113,8 +115,18 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
                 ),
                 style: const TextStyle(fontSize: 14),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 onChanged: (value) {
+                  // Prevent negative input
+                  if (value.startsWith('-')) return;
                   semester.gpa = value;
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) return null;
+                  final numVal = double.tryParse(value);
+                  if (numVal != null && numVal < 0) return 'No negative values';
+                  if (numVal != null && numVal > 4) return 'Max GPA is 4.0';
+                  return null;
                 },
               ),
             ),
@@ -131,8 +143,17 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
                 ),
                 style: const TextStyle(fontSize: 14),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 onChanged: (value) {
+                  // Prevent negative input
+                  if (value.startsWith('-')) return;
                   semester.credits = value;
+                },
+                validator: (value) {
+                  if (value == null || value.isEmpty) return null;
+                  final numVal = double.tryParse(value);
+                  if (numVal != null && numVal < 0) return 'No negative values';
+                  return null;
                 },
               ),
             ),
@@ -240,6 +261,58 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
     );
   }
 
+  // Add 3-dot menu for feedback/logout
+  Widget _buildPopupMenu(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, color: Colors.white),
+      color: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      onSelected: (value) async {
+        if (value == 'feedback') {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user == null || user.isAnonymous) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('You must be signed in to do this action'),
+                  backgroundColor: Colors.red,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+            return;
+          }
+          showAdminFeedbackScreen(context);
+        } else if (value == 'logout') {
+          await FirebaseAuth.instance.signOut();
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          value: 'feedback',
+          child: Row(
+            children: const [
+              Icon(Icons.feedback_outlined, color: Color(0xFF1976D2)),
+              SizedBox(width: 10),
+              Text('Feedback'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'logout',
+          child: Row(
+            children: const [
+              Icon(Icons.logout, color: Color(0xFF1976D2)),
+              SizedBox(width: 10),
+              Text('Logout'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -278,6 +351,9 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
             backgroundColor: Colors.transparent,
             elevation: 0,
             foregroundColor: Colors.white,
+            actions: [
+              _buildPopupMenu(context),
+            ],
           ),
           body: SafeArea(
             child: SingleChildScrollView(

@@ -157,6 +157,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     // Fetch both admins and editors before loading folder
     Future.wait([fetchAdminEmails(), fetchEditorEmails()]).then((_) {
       _loadFolder('');
+      logUserEvent('InitLoad');
     });
     _buildSearchCache();
     // Listen for real-time changes in Editors table
@@ -173,7 +174,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         editor_Emails = emails;
         editorsFetched = true;
       });
-      print('Realtime update: editor emails = $editor_Emails');
+      logUserEvent('EditorListUpdate');
     });
   }
 
@@ -206,6 +207,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         _globalSearchResults = result;
         _globalSearchLoading = false;
       });
+      logUserEvent('Search', details: query);
     } else {
       setState(() {
         _globalSearchResults = [];
@@ -251,12 +253,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         items = response;
         loading = false;
       });
-      // Log folder open event
-      if (path.isNotEmpty) {
-        logUserEvent('Opened Folder', details: path);
-      } else {
-        logUserEvent('Opened Root Folder');
-      }
+      // Log concise folder open event
+      logUserEvent('OpenFolder', details: path.isEmpty ? 'root' : path);
       // Rebuild cache after folder load (only if file/folder changed)
       await _buildSearchCache();
     } catch (e) {
@@ -264,21 +262,21 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         error = 'Failed to load folder: $e';
         loading = false;
       });
-      logUserEvent('Load Folder Failed', details: '$path | $e');
+      logUserEvent('LoadFolderFail', details: '$path | $e');
     }
   }
 
   void _onTapItem(FileObject file) async {
     if (_selectionMode && await isAdmin) {
       _toggleSelection(file);
-      logUserEvent('Toggled Selection', details: file.name);
+      logUserEvent('ToggleSelect', details: file.name);
       return;
     }
     if (_isFolder(file)) {
       final nextPath = currentPath.isEmpty
           ? file.name
           : currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
-      logUserEvent('Opened Folder', details: nextPath);
+      logUserEvent('OpenFolder', details: nextPath);
       _loadFolder(nextPath);
     } else if (_isImage(file.name)) {
       final filePath =
@@ -286,7 +284,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final url = Supabase.instance.client.storage
           .from('pastpapers')
           .getPublicUrl(filePath);
-      logUserEvent('Viewed Image', details: filePath);
+      logUserEvent('ViewImage', details: filePath);
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -299,7 +297,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final url = Supabase.instance.client.storage
           .from('pastpapers')
           .getPublicUrl(filePath);
-      logUserEvent('Viewed PDF', details: filePath);
+      logUserEvent('ViewPDF', details: filePath);
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -311,7 +309,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final url = Supabase.instance.client.storage
           .from('pastpapers')
           .getPublicUrl(filePath);
-      logUserEvent('Viewed Other File', details: filePath);
+      logUserEvent('ViewOther', details: filePath);
       // Use push, not pushAndRemoveUntil, so back returns to last folder
       Navigator.push(
         context,
@@ -1065,7 +1063,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
             _downloadError = null;
           });
         }
-        logUserEvent('Downloaded File', details: filePath);
+        logUserEvent('Download', details: filePath);
       } catch (e) {
         if (mounted) {
           setState(() {
@@ -1338,7 +1336,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache(); // <-- Add this
-      logUserEvent('Uploaded Image', details: uploadPath);
+      logUserEvent('UploadImage', details: uploadPath);
       // --- Log edit event for file creation (image) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       await logEditEvent(email, '$uploadPath was created');
@@ -1355,7 +1353,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache(); // <-- Add this
-      logUserEvent('Uploaded PDF', details: uploadPath);
+      logUserEvent('UploadPDF', details: uploadPath);
       // --- Log edit event for file creation (pdf) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       await logEditEvent(email, '$uploadPath was created');
@@ -1508,7 +1506,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache(); // <-- Add this
-      logUserEvent('Uploaded Image', details: uploadPath);
+      logUserEvent('UploadImage', details: uploadPath);
       // --- Log edit event for file creation (image) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       await logEditEvent(email, '$uploadPath was created');
@@ -1525,7 +1523,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache(); // <-- Add this
-      logUserEvent('Uploaded PDF', details: uploadPath);
+      logUserEvent('UploadPDF', details: uploadPath);
       // --- Log edit event for file creation (pdf) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       await logEditEvent(email, '$uploadPath was created');
@@ -1609,12 +1607,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
                         child: Row(
                           children: [
-                            if (_selectionMode && admin)
-                              IconButton(
-                                icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                                onPressed: _clearSelection,
-                              ),
-                            if (!_selectionMode && currentPath.isNotEmpty)
+                            // Always show back button if not at root
+                            if (currentPath.isNotEmpty)
                               IconButton(
                                 icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
                                 onPressed: () {
@@ -1624,11 +1618,11 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                   final parts = path.split('/');
                                   if (parts.isNotEmpty) parts.removeLast();
                                   final parentPath =
-                                      parts.isEmpty ? '' : parts.join('/') + '/';
+                                      parts.isEmpty ? '' : parts.join('/');
                                   _loadFolder(parentPath);
                                 },
                               ),
-                            if (!_selectionMode && currentPath.isEmpty) const SizedBox(width: 14),
+                            if (currentPath.isEmpty) const SizedBox(width: 14),
                             Expanded(
                               child: Text(
                                 _selectionMode && admin
@@ -1749,7 +1743,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                           ],
                                         ),
                                       ),
-                                    const PopupMenuDivider(),
+                                    // Removed PopupMenuDivider here
                                     PopupMenuItem(
                                       value: 'upload',
                                       child: Row(

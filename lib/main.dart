@@ -273,6 +273,7 @@ class _MyAppState extends State<MyApp> {
           color: Color(0xFF1976D2),
         ),
       ),
+      // Always show OptionsScreen as the first screen after login
       home: StreamBuilder<fb_auth.User?>(
         stream: fb_auth.FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
@@ -280,7 +281,7 @@ class _MyAppState extends State<MyApp> {
             final user = snapshot.data;
             if (user != null) {
               logUserEvent('App Opened');
-              return const OptionsScreen(); // <-- Redirect to OptionsScreen (main menu) after login
+              return const OptionsScreen(); // Always show OptionsScreen after login
             } else {
               // Only show intro button on login page
               return Stack(

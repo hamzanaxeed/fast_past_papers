@@ -79,6 +79,25 @@ class EmailAuthScreen extends StatelessWidget {
                         const SizedBox(height: 18),
                         _SocialLoginButtons(),
                         const SizedBox(height: 10),
+                        // Add "Forgot Password?" button
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                              );
+                            },
+                            child: const Text(
+                              "Forgot Password?",
+                              style: TextStyle(
+                                color: Colors.deepPurple,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
                         TextButton(
                           onPressed: () {
                             Navigator.push(
@@ -125,7 +144,24 @@ class _LoginFormState extends State<_LoginForm> {
   String? _error;
   bool _obscurePassword = true;
 
-  static const String adminEmail = 'l230618@lhr.nu.edu.pk';
+  // Fetch admin emails from Supabase
+  Future<List<String>> fetchAdminEmails() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('Admins')
+          .select('admin_Email');
+      if (response is List) {
+        return response
+            .map((e) => e['admin_Email']?.toString().toLowerCase())
+            .where((email) => email != null)
+            .cast<String>()
+            .toList();
+      }
+    } catch (e) {
+      logUserEvent('AdminEmailFetchFail', details: e.toString());
+    }
+    return [];
+  }
 
   String _getFriendlyError(String? code, String? message) {
     switch (code) {
@@ -167,7 +203,7 @@ class _LoginFormState extends State<_LoginForm> {
           _error = "Please verify your email address before logging in. Check your inbox for a verification email.";
         });
         await FirebaseAuth.instance.signOut();
-        logUserEvent('Login Failed', details: 'Email not verified');
+        logUserEvent('LoginFail', details: 'Email not verified');
         return;
       }
 
@@ -175,9 +211,10 @@ class _LoginFormState extends State<_LoginForm> {
 
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
-      if (email == adminEmail) {
+      final adminEmails = await fetchAdminEmails();
+      if (adminEmails.contains(email)) {
         message = "Logged in as admin";
-        logUserEvent('Admin Login', details: email);
+        logUserEvent('AdminLogin', details: email);
       } else {
         final response = await Supabase.instance.client
             .from('Editors')
@@ -191,9 +228,9 @@ class _LoginFormState extends State<_LoginForm> {
 
           if (editors.contains(email)) {
             message = "Logged in as editor";
-            logUserEvent('Editor Login', details: email);
+            logUserEvent('EditorLogin', details: email);
           } else {
-            logUserEvent('User Login', details: email);
+            logUserEvent('UserLogin', details: email);
           }
         }
       }
@@ -221,12 +258,12 @@ class _LoginFormState extends State<_LoginForm> {
       setState(() {
         _error = _getFriendlyError(e.code, e.message);
       });
-      logUserEvent('Login Failed', details: 'Code: ${e.code}, Message: ${e.message}');
+      logUserEvent('LoginFail', details: e.code);
     } catch (e) {
       setState(() {
         _error = "An unexpected error occurred. Please try again.";
       });
-      logUserEvent('Login Failed', details: 'Unexpected error: $e');
+      logUserEvent('LoginFail', details: 'Unexpected: $e');
     } finally {
       setState(() {
         _loading = false;
@@ -391,15 +428,33 @@ class _SocialLoginButtons extends StatefulWidget {
 class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
   bool _loading = false;
 
+  Future<List<String>> fetchAdminEmails() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('Admins')
+          .select('admin_Email');
+      if (response is List) {
+        return response
+            .map((e) => e['admin_Email']?.toString().toLowerCase())
+            .where((email) => email != null)
+            .cast<String>()
+            .toList();
+      }
+    } catch (e) {
+      logUserEvent('AdminEmailFetchFail', details: e.toString());
+    }
+    return [];
+  }
+
   Future<void> _signInWithGoogle() async {
     setState(() => _loading = true);
 
     try {
-      logUserEvent('Google Login Started');
+      logUserEvent('GoogleLoginStart');
       final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
       if (googleUser == null) {
         setState(() => _loading = false);
-        logUserEvent('Google Login Cancelled');
+        logUserEvent('GoogleLoginCancel');
         return;
       }
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
@@ -413,9 +468,10 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
 
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
-      if (email == _LoginFormState.adminEmail) {
+      final adminEmails = await fetchAdminEmails();
+      if (adminEmails.contains(email)) {
         message = "Logged in as admin";
-        logUserEvent('Admin Google Login', details: email);
+        logUserEvent('AdminGoogleLogin', details: email);
       } else {
         final response = await Supabase.instance.client
             .from('Editors')
@@ -428,9 +484,9 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
               .toList();
           if (editors.contains(email)) {
             message = "Logged in as editor";
-            logUserEvent('Editor Google Login', details: email);
+            logUserEvent('EditorGoogleLogin', details: email);
           } else {
-            logUserEvent('User Google Login', details: email);
+            logUserEvent('UserGoogleLogin', details: email);
           }
         }
       }
@@ -452,7 +508,7 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
         });
       }
     } on FirebaseAuthException catch (e) {
-      logUserEvent('Google Login Failed', details: 'Code: ${e.code}, Message: ${e.message}');
+      logUserEvent('GoogleLoginFail', details: e.code);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -462,7 +518,7 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
         );
       }
     } catch (e) {
-      logUserEvent('Google Login Failed', details: 'Unexpected error: $e');
+      logUserEvent('GoogleLoginFail', details: 'Unexpected: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -870,6 +926,236 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// Add ForgotPasswordScreen
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({Key? key}) : super(key: key);
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  bool _loading = false;
+  String? _message;
+  String? _error;
+
+  Future<void> _sendResetEmail() async {
+    setState(() {
+      _loading = true;
+      _message = null;
+      _error = null;
+    });
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: _emailController.text.trim());
+      setState(() {
+        _message = "A password reset email has been sent. Please check your inbox (and spam folder).";
+      });
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _error = e.code == 'user-not-found'
+            ? "No user found for this email."
+            : "Failed to send reset email: ${e.message}";
+      });
+    } catch (e) {
+      setState(() {
+        _error = "An unexpected error occurred. Please try again.";
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: const Text("Forgot Password"),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        elevation: 4,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+            child: Card(
+              elevation: 12,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              color: Colors.white,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 36),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        "Reset Your Password",
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      TextFormField(
+                        controller: _emailController,
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: const Icon(Icons.email),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your email address';
+                          }
+                          if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
+                            return 'Enter a valid email address';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                      if (_error != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: AnimatedOpacity(
+                            opacity: _error != null ? 1 : 0,
+                            duration: const Duration(milliseconds: 300),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _error!,
+                                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w500),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_message != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: AnimatedOpacity(
+                            opacity: _message != null ? 1 : 0,
+                            duration: const Duration(milliseconds: 300),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      _message!,
+                                      style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w500),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            elevation: 5,
+                          ),
+                          onPressed: _loading
+                              ? null
+                              : () {
+                                  if (_formKey.currentState!.validate()) {
+                                    _sendResetEmail();
+                                  }
+                                },
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 200),
+                            child: _loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Send Reset Email'),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: _loading
+                            ? null
+                            : () {
+                                Navigator.pop(context);
+                              },
+                        child: const Text(
+                          "Back to Login",
+                          style: TextStyle(
+                            color: Colors.deepPurple,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         ),
