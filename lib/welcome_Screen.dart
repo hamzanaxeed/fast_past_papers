@@ -17,8 +17,8 @@ import 'package:http/http.dart' as http; // <-- Add this import
 import 'log.dart'; // <-- Add this import
 import 'view_Logs.dart'; // <-- Add this import
 
-class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({Key? key}) : super(key: key);
+class past_Papers_Screen extends StatefulWidget {
+  const past_Papers_Screen({Key? key}) : super(key: key);
 
   // Static method to fetch editor emails for role check at login
   static Future<void> fetchEditorEmailsStatic() async {
@@ -33,7 +33,7 @@ class WelcomeScreen extends StatefulWidget {
   }
 
   @override
-  State<WelcomeScreen> createState() => _WelcomeScreenState();
+  State<past_Papers_Screen> createState() => _past_Papers_ScreenState();
 }
 
 class _SearchResult {
@@ -42,7 +42,7 @@ class _SearchResult {
   _SearchResult(this.file, this.fullPath);
 }
 
-class _WelcomeScreenState extends State<WelcomeScreen> {
+class _past_Papers_ScreenState extends State<past_Papers_Screen> {
 
   String _pendingSearchQuery = '';
   String currentPath = '';

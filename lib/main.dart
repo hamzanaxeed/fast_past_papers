@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'authentications.dart';
 import 'welcome_Screen.dart';
 import 'log.dart';
+import 'options_Screen.dart'; // <-- Add this import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -279,7 +280,7 @@ class _MyAppState extends State<MyApp> {
             final user = snapshot.data;
             if (user != null) {
               logUserEvent('App Opened');
-              return const WelcomeScreen();
+              return const OptionsScreen(); // <-- Redirect to OptionsScreen
             } else {
               // Only show intro button on login page
               return Stack(

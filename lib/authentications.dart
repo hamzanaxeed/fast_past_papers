@@ -171,7 +171,7 @@ class _LoginFormState extends State<_LoginForm> {
         return;
       }
 
-      await WelcomeScreen.fetchEditorEmailsStatic();
+      await past_Papers_Screen.fetchEditorEmailsStatic();
 
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
@@ -202,7 +202,7 @@ class _LoginFormState extends State<_LoginForm> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => const WelcomeScreen(),
+            builder: (_) => const past_Papers_Screen(),
           ),
         );
 
@@ -409,7 +409,7 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
 
-      await WelcomeScreen.fetchEditorEmailsStatic();
+      await past_Papers_Screen.fetchEditorEmailsStatic();
 
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
@@ -438,7 +438,7 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          MaterialPageRoute(builder: (_) => const past_Papers_Screen()),
         );
         Future.delayed(const Duration(milliseconds: 300), () {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -481,13 +481,13 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
     try {
       logUserEvent('Guest Login Started');
       await FirebaseAuth.instance.signInAnonymously();
-      await WelcomeScreen.fetchEditorEmailsStatic();
+      await past_Papers_Screen.fetchEditorEmailsStatic();
 
       logUserEvent('Guest Login');
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+          MaterialPageRoute(builder: (_) => const past_Papers_Screen()),
         );
         Future.delayed(const Duration(milliseconds: 300), () {
           ScaffoldMessenger.of(context).showSnackBar(
