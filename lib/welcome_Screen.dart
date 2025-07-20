@@ -150,7 +150,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   void dispose() {
     _editorSub?.cancel();
     _searchController.dispose();
-    _searchTimeoutTimer?.cancel();
     super.dispose();
   }
 
@@ -595,22 +594,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             setState(() {
               searchQuery = query;
               _globalSearchLoading = query.isNotEmpty;
-              _searchTimedOut = false;
             });
-
-            // Cancel any previous timer
-            _searchTimeoutTimer?.cancel();
-
-            // Start timer if searching
-            if (query.isNotEmpty) {
-              _searchTimeoutTimer = Timer(const Duration(seconds: 10), () {
-                if (mounted && _globalSearchLoading && _globalSearchResults.isEmpty) {
-                  setState(() {
-                    _searchTimedOut = true;
-                  });
-                }
-              });
-            }
 
             // Only search if cache is loaded
             if (query.isNotEmpty && _allFilesCache.isNotEmpty) {
@@ -621,16 +605,12 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               setState(() {
                 _globalSearchResults = result;
                 _globalSearchLoading = false;
-                _searchTimedOut = false;
               });
-              _searchTimeoutTimer?.cancel();
             } else if (query.isEmpty) {
               setState(() {
                 _globalSearchResults = [];
                 _globalSearchLoading = false;
-                _searchTimedOut = false;
               });
-              _searchTimeoutTimer?.cancel();
             }
             // If cache is not loaded, do not set _globalSearchResults yet
           },
@@ -642,26 +622,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   // Improved list view with more spacing and hover effect
   Widget _buildList() {
     if (_globalSearchLoading) {
-      // Show timeout message if search takes too long
-      if (_searchTimedOut) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 40),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: const [
-                Icon(Icons.refresh, color: Colors.orange, size: 40),
-                SizedBox(height: 12),
-                Text(
-                  'Search is taking too long.\nYou should refresh.',
-                  style: TextStyle(fontSize: 18, color: Colors.orange, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        );
-      }
       return const Center(child: CircularProgressIndicator());
     }
     if (searchQuery.isNotEmpty) {
@@ -677,7 +637,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         ).toList();
         // Do not show loading if there are no results, just show "No results found"
         if (result.isNotEmpty) {
-          // Updateresults and rebuild
+          // Update results and rebuild
           WidgetsBinding.instance.addPostFrameCallback((_) {
             setState(() {
               _globalSearchResults = result;
