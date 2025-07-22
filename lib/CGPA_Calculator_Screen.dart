@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'feedback.dart';
+import 'message_File.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 
 class CgpaCalculatorScreen extends StatefulWidget {
   const CgpaCalculatorScreen({Key? key}) : super(key: key);
@@ -10,7 +12,7 @@ class CgpaCalculatorScreen extends StatefulWidget {
 }
 
 class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with SingleTickerProviderStateMixin {
-  final List<Semester> _semesters = [Semester(gpa: '', credits: '')];
+  final List<Semester> _semesters = [Semester(gpa: '')];
 
   double? cgpa;
   late AnimationController _controller;
@@ -34,7 +36,7 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
 
   void _addSemester() {
     setState(() {
-      _semesters.add(Semester(gpa: '', credits: ''));
+      _semesters.add(Semester(gpa: ''));
     });
   }
 
@@ -47,24 +49,22 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
   }
 
   void _calculateCGPA() {
-    double totalPoints = 0;
-    double totalCredits = 0;
+    double totalGpa = 0;
+    int count = 0;
 
     for (var semester in _semesters) {
       final gpa = double.tryParse(semester.gpa) ?? 0;
-      final credits = double.tryParse(semester.credits) ?? 0;
-      totalPoints += gpa * credits;
-      totalCredits += credits;
+      totalGpa += gpa;
+      count++;
     }
 
     setState(() {
-      cgpa = totalCredits > 0 ? totalPoints / totalCredits : 0;
+      cgpa = count > 0 ? totalGpa / count : 0;
       _controller.forward(from: 0);
     });
   }
 
   int get totalSemesters => _semesters.length;
-  double get totalCredits => _semesters.fold(0, (sum, sem) => sum + (double.tryParse(sem.credits) ?? 0));
 
   Widget _buildSemesterTile(int index) {
     final semester = _semesters[index];
@@ -104,7 +104,7 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
             ),
             const SizedBox(width: 10),
             Expanded(
-              flex: 3,
+              flex: 1,
               child: TextFormField(
                 initialValue: semester.gpa,
                 decoration: InputDecoration(
@@ -126,33 +126,6 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
                   final numVal = double.tryParse(value);
                   if (numVal != null && numVal < 0) return 'No negative values';
                   if (numVal != null && numVal > 4) return 'Max GPA is 4.0';
-                  return null;
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              flex: 2,
-              child: TextFormField(
-                initialValue: semester.credits,
-                decoration: InputDecoration(
-                  labelText: 'Credits',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                ),
-                style: const TextStyle(fontSize: 14),
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                onChanged: (value) {
-                  // Prevent negative input
-                  if (value.startsWith('-')) return;
-                  semester.credits = value;
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) return null;
-                  final numVal = double.tryParse(value);
-                  if (numVal != null && numVal < 0) return 'No negative values';
                   return null;
                 },
               ),
@@ -209,7 +182,7 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
         child: Text(
-          "Semesters: $totalSemesters | Total Credits : $totalCredits",
+          "Semesters: $totalSemesters",
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ),
@@ -261,56 +234,111 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
     );
   }
 
-  // Add 3-dot menu for feedback/logout
+  // Add 3-dot menu for feedback/logout and manage messages for admin
   Widget _buildPopupMenu(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white),
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      onSelected: (value) async {
-        if (value == 'feedback') {
-          final user = FirebaseAuth.instance.currentUser;
-          if (user == null || user.isAnonymous) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('You must be signed in to do this action'),
-                  backgroundColor: Colors.red,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+    final user = FirebaseAuth.instance.currentUser;
+    return FutureBuilder<bool>(
+      future: _isAdmin(user),
+      builder: (context, snapshot) {
+        final isAdmin = snapshot.data ?? false;
+        return PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.white),
+          color: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          onSelected: (value) async {
+            if (value == 'feedback') {
+              if (user == null || user.isAnonymous) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('You must be signed in to do this action'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+                return;
+              }
+              await showFeedbackOrAdminScreen(context);
+            } else if (value == 'logout') {
+              await FirebaseAuth.instance.signOut();
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            } else if (value == 'manage_messages') {
+              showManageMessagesDialog(context);
+            } else if (value == 'editors') {
+              // Navigate to manage editors screen
+            } else if (value == 'logs') {
+              // Navigate to view logs screen
             }
-            return;
-          }
-          showAdminFeedbackScreen(context);
-        } else if (value == 'logout') {
-          await FirebaseAuth.instance.signOut();
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
+          },
+          itemBuilder: (context) => [
+            if (isAdmin)
+              PopupMenuItem(
+                value: 'editors',
+                child: Row(
+                  children: const [
+                    Icon(Icons.manage_accounts, color: Color(0xFF1976D2)),
+                    SizedBox(width: 10),
+                    Text('Manage Editors'),
+                  ],
+                ),
+              ),
+            if (isAdmin)
+              PopupMenuItem(
+                value: 'logs',
+                child: Row(
+                  children: const [
+                    Icon(Icons.list_alt, color: Color(0xFF1976D2)),
+                    SizedBox(width: 10),
+                    Text('View Logs'),
+                  ],
+                ),
+              ),
+            if (isAdmin)
+              PopupMenuItem(
+                value: 'manage_messages',
+                child: Row(
+                  children: const [
+                    Icon(Icons.message, color: Color(0xFF1976D2)),
+                    SizedBox(width: 10),
+                    Text('Manage Messages'),
+                  ],
+                ),
+              ),
+            PopupMenuItem(
+              value: 'feedback',
+              child: Row(
+                children: const [
+                  Icon(Icons.feedback_outlined, color: Color(0xFF1976D2)),
+                  SizedBox(width: 10),
+                  Text('Feedback'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'logout',
+              child: Row(
+                children: const [
+                  Icon(Icons.logout, color: Color(0xFF1976D2)),
+                  SizedBox(width: 10),
+                  Text('Logout'),
+                ],
+              ),
+            ),
+          ],
+        );
       },
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'feedback',
-          child: Row(
-            children: const [
-              Icon(Icons.feedback_outlined, color: Color(0xFF1976D2)),
-              SizedBox(width: 10),
-              Text('Feedback'),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'logout',
-          child: Row(
-            children: const [
-              Icon(Icons.logout, color: Color(0xFF1976D2)),
-              SizedBox(width: 10),
-              Text('Logout'),
-            ],
-          ),
-        ),
-      ],
     );
+  }
+
+  Future<bool> _isAdmin(User? user) async {
+    if (user == null || user.email == null) return false;
+    final response = await supa.Supabase.instance.client
+        .from('Admins')
+        .select('admin_Email')
+        .eq('admin_Email', user.email!.toLowerCase())
+        .maybeSingle();
+    return response != null;
   }
 
   @override
@@ -405,7 +433,6 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
 
 class Semester {
   String gpa;
-  String credits;
 
-  Semester({required this.gpa, required this.credits});
+  Semester({required this.gpa});
 }

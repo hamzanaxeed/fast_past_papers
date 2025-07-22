@@ -53,10 +53,10 @@ class _EditorHandlingScreenState extends State<EditorHandlingScreen> {
         _editorsFuture = _fetchEditors();
       });
       _showSuccess('Editor added successfully.');
-      logUserEvent('Editor Added', details: email.trim());
+      logEditEvent('Editor Added');
     } catch (e) {
       _showError('Failed to add editor: $e');
-      logUserEvent('Editor Add Failed', details: '$email | $e');
+      logEditEvent('Editor Add Failed');
     }
   }
 

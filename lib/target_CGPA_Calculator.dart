@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_auth/firebase_auth.dart' as fire;
 import 'feedback.dart';
+import 'message_File.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supa;
 
 class TargetCgpaCalculatorScreen extends StatefulWidget {
   const TargetCgpaCalculatorScreen({Key? key}) : super(key: key);
@@ -39,56 +41,107 @@ class _TargetCgpaCalculatorScreenState extends State<TargetCgpaCalculatorScreen>
     });
   }
 
-  // 3-dot menu for feedback/logout
+  // 3-dot menu for feedback/logout and manage messages for admin
   Widget _buildPopupMenu(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, color: Colors.white),
-      color: Colors.white,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      onSelected: (value) async {
-        if (value == 'feedback') {
-          final user = FirebaseAuth.instance.currentUser;
-          if (user == null || user.isAnonymous) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('You must be signed in to do this action'),
-                  backgroundColor: Colors.red,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+    final user = fire.FirebaseAuth.instance.currentUser;
+    return FutureBuilder<bool>(
+      future: _isAdmin(user),
+      builder: (context, snapshot) {
+        final isAdmin = snapshot.data ?? false;
+        return PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, color: Colors.white),
+          color: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          onSelected: (value) async {
+            if (value == 'feedback') {
+              if (user == null || user.isAnonymous) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('You must be signed in to do this action'),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+                return;
+              }
+              await showFeedbackOrAdminScreen(context);
+            } else if (value == 'logout') {
+              await fire.FirebaseAuth.instance.signOut();
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            } else if (value == 'manage_messages') {
+              showManageMessagesDialog(context);
             }
-            return;
-          }
-          showAdminFeedbackScreen(context);
-        } else if (value == 'logout') {
-          await FirebaseAuth.instance.signOut();
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
+          },
+          itemBuilder: (context) => [
+            if (isAdmin)
+              PopupMenuItem(
+                value: 'editors',
+                child: Row(
+                  children: const [
+                    Icon(Icons.manage_accounts, color: Color(0xFF1976D2)),
+                    SizedBox(width: 10),
+                    Text('Manage Editors'),
+                  ],
+                ),
+              ),
+            if (isAdmin)
+              PopupMenuItem(
+                value: 'logs',
+                child: Row(
+                  children: const [
+                    Icon(Icons.list_alt, color: Color(0xFF1976D2)),
+                    SizedBox(width: 10),
+                    Text('View Logs'),
+                  ],
+                ),
+              ),
+            if (isAdmin)
+              PopupMenuItem(
+                value: 'manage_messages',
+                child: Row(
+                  children: const [
+                    Icon(Icons.message, color: Color(0xFF1976D2)),
+                    SizedBox(width: 10),
+                    Text('Manage Messages'),
+                  ],
+                ),
+              ),
+            PopupMenuItem(
+              value: 'feedback',
+              child: Row(
+                children: const [
+                  Icon(Icons.feedback_outlined, color: Color(0xFF1976D2)),
+                  SizedBox(width: 10),
+                  Text('Feedback'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'logout',
+              child: Row(
+                children: const [
+                  Icon(Icons.logout, color: Color(0xFF1976D2)),
+                  SizedBox(width: 10),
+                  Text('Logout'),
+                ],
+              ),
+            ),
+          ],
+        );
       },
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: 'feedback',
-          child: Row(
-            children: const [
-              Icon(Icons.feedback_outlined, color: Color(0xFF1976D2)),
-              SizedBox(width: 10),
-              Text('Feedback'),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: 'logout',
-          child: Row(
-            children: const [
-              Icon(Icons.logout, color: Color(0xFF1976D2)),
-              SizedBox(width: 10),
-              Text('Logout'),
-            ],
-          ),
-        ),
-      ],
     );
+  }
+
+  Future<bool> _isAdmin(fire.User? user) async {
+    if (user == null || user.email == null) return false;
+    final response = await supa.Supabase.instance.client
+        .from('Admins')
+        .select('admin_Email')
+        .eq('admin_Email', user.email!.toLowerCase())
+        .maybeSingle();
+    return response != null;
   }
 
   @override

@@ -16,6 +16,8 @@ import 'package:path_provider/path_provider.dart'; // <-- Add this import
 import 'package:http/http.dart' as http; // <-- Add this import
 import 'log.dart'; // <-- Add this import
 import 'view_Logs.dart'; // <-- Add this import
+import 'message_File.dart'; // <-- Add this import
+import 'options_Screen.dart';
 
 class past_Papers_Screen extends StatefulWidget {
   const past_Papers_Screen({Key? key}) : super(key: key);
@@ -174,7 +176,6 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         editor_Emails = emails;
         editorsFetched = true;
       });
-      logUserEvent('EditorListUpdate');
     });
   }
 
@@ -1183,10 +1184,10 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       await tempFile.delete();
       _folderCounts.clear(); // Clear cache before refresh
       await _loadFolder(currentPath); // Ensure refresh after folder creation
-      logUserEvent('Created Folder', details: folderPath);
       // --- Log edit event for folder creation ---
-      final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
-      await logEditEvent(email, '$folderPath was created');
+    //  final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
+      print('DEBUG: Created folder at ==================$folderPath');
+      await logEditEvent('Created folder: $folderPath');
     }
   }
 
@@ -1335,11 +1336,10 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
-      await _buildSearchCache(); // <-- Add this
-      logUserEvent('UploadImage', details: uploadPath);
+      await _buildSearchCache();
       // --- Log edit event for file creation (image) ---
-      final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
-      await logEditEvent(email, '$uploadPath was created');
+      print('DEBUG: Created folder at ==================$uploadPath');
+      await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
       final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
       if (result == null || result.files.single.path == null) return;
@@ -1352,15 +1352,15 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
-      await _buildSearchCache(); // <-- Add this
-      logUserEvent('UploadPDF', details: uploadPath);
+      await _buildSearchCache();
+
       // --- Log edit event for file creation (pdf) ---
       final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
-      await logEditEvent(email, '$uploadPath was created');
+      print('DEBUG: Created folder at ==================$uploadPath');
+      await logEditEvent('Uploaded PDF: $uploadPath');
     }
   }
 
-  // Add this method to upload a file to a specific path (for subfolder upload)
   Future<void> _uploadFileToPath(String targetPath) async {
     // Prevent guest users from uploading
     final user = FirebaseAuth.instance.currentUser;
@@ -1505,11 +1505,11 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
-      await _buildSearchCache(); // <-- Add this
-      logUserEvent('UploadImage', details: uploadPath);
+      await _buildSearchCache();
       // --- Log edit event for file creation (image) ---
-      final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
-      await logEditEvent(email, '$uploadPath was created');
+      //final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
+      print('DEBUG: Created folder at ==================$uploadPath');
+      await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
       final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
       if (result == null || result.files.single.path == null) return;
@@ -1522,11 +1522,11 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
-      await _buildSearchCache(); // <-- Add this
-      logUserEvent('UploadPDF', details: uploadPath);
+      await _buildSearchCache();
       // --- Log edit event for file creation (pdf) ---
-      final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
-      await logEditEvent(email, '$uploadPath was created');
+   //   final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
+      print('DEBUG: Created folder at ==================$uploadPath');
+      await logEditEvent('Uploaded PDF: $uploadPath');
     }
   }
 
@@ -1580,8 +1580,13 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               final parentPath = parts.isEmpty ? '' : parts.join('/');
               await _loadFolder(parentPath);
               return false; // Prevent default pop (don't exit app)
+            } else {
+              // At root: go back to OptionsScreen
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(builder: (_) => const OptionsScreen()),
+              );
+              return false;
             }
-            return true; // Allow app exit at root
           },
           child: Scaffold(
             extendBodyBehindAppBar: false,
@@ -1620,6 +1625,16 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                   final parentPath =
                                       parts.isEmpty ? '' : parts.join('/');
                                   _loadFolder(parentPath);
+                                },
+                              ),
+                            // --- ADD: Show back button at root to go to OptionsScreen ---
+                            if (currentPath.isEmpty)
+                              IconButton(
+                                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                                onPressed: () {
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(builder: (_) => const OptionsScreen()),
+                                  );
                                 },
                               ),
                             if (currentPath.isEmpty) const SizedBox(width: 14),
@@ -1702,7 +1717,10 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                       }
                                       return;
                                     }
-                                    showAdminFeedbackScreen(context);
+                                    // Use the new helper to show feedback or admin screen
+                                    await showFeedbackOrAdminScreen(context);
+                                  } else if (value == 'manage_messages') {
+                                    showManageMessagesDialog(context); // <-- Use from message_File.dart
                                   } else if (value == 'logout') {
                                     _logout(context);
                                   }
@@ -1743,7 +1761,17 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                           ],
                                         ),
                                       ),
-                                    // Removed PopupMenuDivider here
+                                    if (admin)
+                                      PopupMenuItem(
+                                        value: 'manage_messages',
+                                        child: Row(
+                                          children: const [
+                                            Icon(Icons.message, color: Color(0xFF1976D2)),
+                                            SizedBox(width: 10),
+                                            Text('Manage Messages'),
+                                          ],
+                                        ),
+                                      ),
                                     PopupMenuItem(
                                       value: 'upload',
                                       child: Row(

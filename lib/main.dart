@@ -9,7 +9,8 @@ import 'authentications.dart';
 import 'welcome_Screen.dart';
 import 'log.dart';
 import 'options_Screen.dart'; // <-- Add this import
-
+import 'message_File.dart'; // <-- Add this import
+import 'dart:io' as io;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -125,14 +126,31 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   static const int currentAppVersion = 1;
+  bool _versionBlocked = false;
+
+  // Helper to check if current user is admin
+  Future<bool> _isAdminUser() async {
+    try {
+      final user = fb_auth.FirebaseAuth.instance.currentUser;
+      if (user == null || user.email == null) return false;
+      final response = await Supabase.instance.client
+          .from('Admins')
+          .select('admin_Email')
+          .eq('admin_Email', user.email!.toLowerCase())
+          .maybeSingle();
+      return response != null;
+    } catch (_) {
+      return false;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _storeCurrentVersion();
-    // Check version on app open
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkVersionAndShowAlert(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _checkVersionAndShowAlert(context);
+      // Remove version check here, move after login
     });
   }
 
@@ -185,8 +203,71 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
+  // Only check version for non-admin users after login
+  Future<void> _checkIfVersionIsWorkingForUser(BuildContext context) async {
+    try {
+      final isAdmin = await _isAdminUser();
+      if (isAdmin) return; // Admins bypass version check
+
+      final response = await Supabase.instance.client
+          .from('version')
+          .select('current_Version, working')
+          .eq('current_Version', currentAppVersion)
+          .maybeSingle();
+
+      if (response != null && response['working'] == false) {
+        setState(() {
+          _versionBlocked = true;
+        });
+        // ignore: use_build_context_synchronously
+        await showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => WillPopScope(
+            onWillPop: () async => false,
+            child: AlertDialog(
+              title: const Text('App Disabled'),
+              content: const Text(
+                  'This version of the app is currently disabled. Please update or try again later.'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Future.delayed(const Duration(milliseconds: 100), () {
+                      io.exit(0);
+                    });
+                  },
+                  child: const Text('Exit'),
+                ),
+              ],
+            ),
+          ),
+        );
+        Future.delayed(const Duration(milliseconds: 100), () {
+          io.exit(0);
+        });
+      }
+    } catch (e) {
+      print("Error checking working: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (_versionBlocked) {
+      return WillPopScope(
+        onWillPop: () async => false,
+        child: const Scaffold(
+          body: Center(
+            child: Text(
+              'This version of the app is currently disabled.',
+              style: TextStyle(fontSize: 18, color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
     return MaterialApp(
       title: 'Fast Past Papers',
       debugShowCheckedModeBanner: false,
@@ -281,7 +362,12 @@ class _MyAppState extends State<MyApp> {
             final user = snapshot.data;
             if (user != null) {
               logUserEvent('App Opened');
-              return const OptionsScreen(); // Always show OptionsScreen after login
+              // Version check for non-admin after login
+              _checkIfVersionIsWorkingForUser(context).then((_) {
+                // Show message after version check
+                showStartupMessage(context); // <-- Use from message_File.dart
+              });
+              return const OptionsScreen(); // <-- Always open OptionsScreen after login
             } else {
               // Only show intro button on login page
               return Stack(

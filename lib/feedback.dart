@@ -149,7 +149,35 @@ void showFeedbackDialog(BuildContext context) {
   );
 }
 
-void showAdminFeedbackScreen(BuildContext context) {
+// Helper to check if current user is admin
+Future<bool> isCurrentUserAdmin() async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null || user.email == null) return false;
+  final response = await Supabase.instance.client
+      .from('Admins')
+      .select('admin_Email')
+      .eq('admin_Email', user.email!.toLowerCase())
+      .maybeSingle();
+  return response != null;
+}
+
+// Show feedback dialog for users, admin feedback screen for admins
+Future<void> showFeedbackOrAdminScreen(BuildContext context) async {
+  final isAdmin = await isCurrentUserAdmin();
+  if (isAdmin) {
+    showAdminFeedbackScreen(context);
+  } else {
+    showFeedbackDialog(context);
+  }
+}
+
+// Only allow admins to open the admin feedback screen
+void showAdminFeedbackScreen(BuildContext context) async {
+  final isAdmin = await isCurrentUserAdmin();
+  if (!isAdmin) {
+    // Optionally show a message or do nothing
+    return;
+  }
   logUserEvent('Admin Feedback Screen Opened');
   showModalBottomSheet(
     context: context,
@@ -172,7 +200,7 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
         .from('Feedback')
         .select()
         .eq('Read', showRead)
-        .order('Time', ascending: false);
+        .order('Time', ascending: false); // Newest to oldest
     if (response is List) return response.cast<Map<String, dynamic>>();
     return [];
   }
@@ -247,9 +275,16 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
   }
 
   void _showFeedbackDetailDialog(Map<String, dynamic> fb, bool isRead) {
-    final formattedTime = fb['Time'] != null
-        ? DateFormat('yyyy-MM-dd  hh:mm a').format(DateTime.tryParse(fb['Time']) ?? DateTime.now())
-        : '';
+    // Use DateTime.parse for ISO8601 and fallback to DateTime.now() if null/invalid
+    String formattedTime = '';
+    if (fb['Time'] != null) {
+      try {
+        final dt = DateTime.parse(fb['Time']);
+        formattedTime = DateFormat('yyyy-MM-dd • hh:mm a').format(dt);
+      } catch (_) {
+        formattedTime = '';
+      }
+    }
     logUserEvent('Feedback Detail Dialog Opened', details: 'Feedback ID: ${fb['id']}');
     showDialog(
       context: context,
@@ -404,9 +439,16 @@ class _AdminFeedbackSheetState extends State<_AdminFeedbackSheet> {
                       itemBuilder: (context, i) {
                         final fb = feedbacks[i];
                         final isRead = fb['Read'] == true;
-                        final formattedTime = fb['Time'] != null
-                            ? DateFormat('yyyy-MM-dd  hh:mm a').format(DateTime.tryParse(fb['Time']) ?? DateTime.now())
-                            : '';
+                        // Use DateTime.parse for ISO8601 and fallback to DateTime.now() if null/invalid
+                        String formattedTime = '';
+                        if (fb['Time'] != null) {
+                          try {
+                            final dt = DateTime.parse(fb['Time']);
+                            formattedTime = DateFormat('yyyy-MM-dd • hh:mm a').format(dt);
+                          } catch (_) {
+                            formattedTime = '';
+                          }
+                        }
                         return GestureDetector(
                           onTap: () => _showFeedbackDetailDialog(fb, isRead),
                           onLongPress: () {
