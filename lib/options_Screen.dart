@@ -7,6 +7,9 @@ import 'feedback.dart';
 import 'target_CGPA_Calculator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'message_File.dart'; // <-- Add this import
+import 'editor_Handling.dart'; // Add this import
+import 'log.dart'; // Add this import
+import 'view_Logs.dart'; // Add this import
 
 class OptionsScreen extends StatelessWidget {
   const OptionsScreen({Key? key}) : super(key: key);
@@ -66,6 +69,18 @@ class OptionsScreen extends StatelessWidget {
           Navigator.of(context).popUntil((route) => route.isFirst);
         } else if (value == 'manage_messages') {
           showManageMessagesDialog(context); // <-- Use from message_File.dart
+        } else if (value == 'editors') {
+          // Navigate to manage editors screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const EditorHandlingScreen()),
+          );
+        } else if (value == 'logs') {
+          // Navigate to view logs screen (use ViewLogsScreen as in welcome_Screen)
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ViewLogsScreen()),
+          );
         }
       },
       itemBuilder: (context) => [
