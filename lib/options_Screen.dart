@@ -10,6 +10,7 @@ import 'message_File.dart'; // <-- Add this import
 import 'editor_Handling.dart'; // Add this import
 import 'log.dart'; // Add this import
 import 'view_Logs.dart'; // Add this import
+import 'timeTable.dart';
 
 class OptionsScreen extends StatelessWidget {
   const OptionsScreen({Key? key}) : super(key: key);
@@ -251,13 +252,9 @@ class OptionsScreen extends StatelessWidget {
                           label: 'See Time Table',
                           color: Colors.orange,
                           onPressed: () {
-                            // Show SnackBar on click
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Thora sabar krle bhai'),
-                                backgroundColor: Colors.deepPurple,
-                                behavior: SnackBarBehavior.floating,
-                              ),
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const TimeTableScreen()),
                             );
                           },
                         ),
