@@ -603,6 +603,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     acc ??= [];
     if (depth > maxDepth || acc.length > maxResults) return acc;
     final items = await Supabase.instance.client.storage.from('pastpapers').list(path: path);
+    print('DEBUG: Fetching items at path "$path" (depth $depth): ${items.map((e) => e.name).join(', ')}'); // Debug log
     for (final item in items) {
       final itemPath = path.isEmpty ? item.name : '$path/${item.name}';
       acc.add(_SearchResult(item, itemPath));
