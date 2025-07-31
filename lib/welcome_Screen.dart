@@ -45,6 +45,13 @@ class _SearchResult {
   _SearchResult(this.file, this.fullPath);
 }
 
+class _ProjectFile {
+  final FileObject file;
+  final String project; // 'main' or 'temp'
+  final String fullPath;
+  _ProjectFile(this.file, this.project, this.fullPath);
+}
+
 class _past_Papers_ScreenState extends State<past_Papers_Screen> {
 
   String _pendingSearchQuery = '';
@@ -259,7 +266,21 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   // Helper to get the current project name
   String get _currentProjectName => _useTempProject ? "Temp Project" : "Main Project";
 
-  Future<void> _loadFolder(String path) async {
+  // Store root files from both projects
+  List<_ProjectFile> _rootProjectFiles = [];
+
+  // Helper to get the correct supabase client for a project
+  SupabaseClient _getClient(String project) {
+    return project == 'temp' ? tempSupabaseClient : Supabase.instance.client;
+  }
+
+  // Helper to get the correct bucket for a project
+  String _getBucket(String project) {
+    return project == 'temp' ? 'pastpaper1' : 'pastpapers';
+  }
+
+  // At root, fetch both projects; inside, fetch only from the correct one
+  Future<void> _loadFolder(String path, {String? project}) async {
     setState(() {
       loading = true;
       error = null;
@@ -272,16 +293,36 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     await fetchEditorEmails();
 
     try {
-      // Always use the correct client/bucket for the current path/project
-      final response =
-        _client.storage.from(_bucketName).list(path: path);
-      final result = await response;
-      setState(() {
-        currentPath = path;
-        items = result;
-        loading = false;
-      });
-      logUserEvent('OpenFolder', details: path.isEmpty ? 'root ($_currentProjectName)' : path);
+      if (path.isEmpty) {
+        // At root: fetch both projects
+        final mainFuture = Supabase.instance.client.storage.from('pastpapers').list(path: '');
+        final tempFuture = tempSupabaseClient.storage.from('pastpaper1').list(path: '');
+        final results = await Future.wait([mainFuture, tempFuture]);
+        // Store as _ProjectFile for rendering
+        _rootProjectFiles = [
+          ...results[0].map((f) => _ProjectFile(f, 'main', f.name)),
+          ...results[1].map((f) => _ProjectFile(f, 'temp', f.name)),
+        ];
+        _currentProject = null;
+        setState(() {
+          currentPath = '';
+          items = []; // Not used at root
+          loading = false;
+        });
+      } else {
+        // Inside a folder: fetch only from the correct project
+        final proj = project ?? _currentProject ?? 'main';
+        final client = _getClient(proj);
+        final bucket = _getBucket(proj);
+        final response = await client.storage.from(bucket).list(path: path);
+        _currentProject = proj;
+        setState(() {
+          currentPath = path;
+          items = response;
+          loading = false;
+        });
+      }
+      logUserEvent('OpenFolder', details: path.isEmpty ? 'root (both projects)' : path);
       // Rebuild cache after folder load (only if file/folder changed)
       await _buildSearchCache();
     } catch (e) {
@@ -293,7 +334,10 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     }
   }
 
-  void _onTapItem(FileObject file) async {
+  // Track which project/folder is being viewed when not at root
+  String? _currentProject; // 'main' or 'temp' or null (at root)
+
+  void _onTapItem(FileObject file, {String? project}) async {
     if (_selectionMode && await isAdmin) {
       _toggleSelection(file);
       logUserEvent('ToggleSelect', details: file.name);
@@ -304,12 +348,18 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           ? file.name
           : currentPath + (currentPath.endsWith('/') ? '' : '/') + file.name;
       logUserEvent('OpenFolder', details: nextPath);
-      _loadFolder(nextPath);
+      if (currentPath.isEmpty) {
+        // At root, must know which project
+        _loadFolder(nextPath, project: project);
+      } else {
+        _loadFolder(nextPath, project: _currentProject);
+      }
     } else if (_isImage(file.name)) {
       final filePath =
       currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
-      final url = _client.storage
-          .from(_bucketName)
+      final proj = currentPath.isEmpty ? (project ?? 'main') : (_currentProject ?? 'main');
+      final url = _getClient(proj).storage
+          .from(_getBucket(proj))
           .getPublicUrl(filePath);
       logUserEvent('ViewImage', details: filePath);
       Navigator.push(
@@ -321,8 +371,9 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     } else if (_isPdf(file.name)) {
       final filePath =
       currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
-      final url = _client.storage
-          .from(_bucketName)
+      final proj = currentPath.isEmpty ? (project ?? 'main') : (_currentProject ?? 'main');
+      final url = _getClient(proj).storage
+          .from(_getBucket(proj))
           .getPublicUrl(filePath);
       logUserEvent('ViewPDF', details: filePath);
       Navigator.push(
@@ -333,11 +384,11 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       );
     } else if (_isPptx(file.name) || _isDocx(file.name) || _isXlsx(file.name) || _isTxt(file.name)) {
       final filePath = currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
-      final url = _client.storage
-          .from(_bucketName)
+      final proj = currentPath.isEmpty ? (project ?? 'main') : (_currentProject ?? 'main');
+      final url = _getClient(proj).storage
+          .from(_getBucket(proj))
           .getPublicUrl(filePath);
       logUserEvent('ViewOther', details: filePath);
-      // Use push, not pushAndRemoveUntil, so back returns to last folder
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -1582,68 +1633,18 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   // For brevity, only show the pattern:
   // Replace all Supabase.instance.client with _client in this file.
 
-  // Add a toggle button at the root to switch projects
-  Widget _buildProjectToggle() {
-    if (currentPath.isNotEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("Project: ", style: TextStyle(fontWeight: FontWeight.bold)),
-          ChoiceChip(
-            label: const Text("Main"),
-            selected: !_useTempProject,
-            onSelected: (selected) async {
-              if (_useTempProject) {
-                setState(() {
-                  _useTempProject = false;
-                  _allFilesCache = [];
-                  _folderCounts.clear();
-                  currentPath = '';
-                });
-                await _loadFolder('');
-                await _buildSearchCache();
-              }
-            },
-          ),
-          const SizedBox(width: 10),
-          ChoiceChip(
-            label: const Text("Temp"),
-            selected: _useTempProject,
-            onSelected: (selected) async {
-              if (!_useTempProject) {
-                setState(() {
-                  _useTempProject = true;
-                  _allFilesCache = [];
-                  _folderCounts.clear();
-                  currentPath = '';
-                });
-                await _loadFolder('');
-                await _buildSearchCache();
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  // In build(), show the toggle at the root
+  // In build(), show both projects at root
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(
       future: isEditor,
       builder: (context, editorSnapshot) {
         final editor = editorSnapshot.data ?? false;
-
-        // --- Only show upload button if in a 2-level folder (folder/subfolder) for regular users ---
         final pathSegments = currentPath.split('/').where((e) => e.isNotEmpty).toList();
         final showUploadButtonForUser = pathSegments.length == 2;
 
         return WillPopScope(
           onWillPop: () async {
-            // Only handle back navigation in folder/file list, not in preview screens
             if (currentPath.isNotEmpty) {
               var path = currentPath.endsWith('/')
                   ? currentPath.substring(0, currentPath.length - 1)
@@ -1651,10 +1652,13 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               final parts = path.split('/');
               if (parts.isNotEmpty) parts.removeLast();
               final parentPath = parts.isEmpty ? '' : parts.join('/');
-              await _loadFolder(parentPath);
-              return false; // Prevent default pop (don't exit app)
+              if (parentPath.isEmpty) {
+                // Going back to root: clear project context
+                _currentProject = null;
+              }
+              await _loadFolder(parentPath, project: _currentProject);
+              return false;
             } else {
-              // At root: go back to OptionsScreen
               Navigator.of(context).pushReplacement(
                 MaterialPageRoute(builder: (_) => const OptionsScreen()),
               );
@@ -1904,7 +1908,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
                       child: Column(
                         children: [
-                          _buildProjectToggle(), // <-- Add this line
+                          // _buildProjectToggle(), // REMOVE
                           _buildSearchBar(),
                           const SizedBox(height: 8),
                           Expanded(
@@ -1919,17 +1923,19 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                   },
                                   child: RefreshIndicator(
                                     onRefresh: () async {
-                                      _folderCounts.clear(); // <-- Clear cached counts before refresh
-                                      await _loadFolder(currentPath);
+                                      _folderCounts.clear();
+                                      await _loadFolder(currentPath, project: _currentProject);
                                     },
                                     child: GestureDetector(
                                       onVerticalDragEnd: (details) async {
                                         if (details.primaryVelocity != null && details.primaryVelocity! < -200) {
-                                          _folderCounts.clear(); // <-- Clear cached counts before refresh
-                                          await _loadFolder(currentPath);
+                                          _folderCounts.clear();
+                                          await _loadFolder(currentPath, project: _currentProject);
                                         }
                                       },
-                                      child: _buildList(),
+                                      child: currentPath.isEmpty
+                                          ? _buildCombinedRootList()
+                                          : _buildList(),
                                     ),
                                   ),
                                 ),
@@ -2023,5 +2029,109 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       },
     );
   }
-}
 
+  // Build combined root list for both projects as a single sorted list
+  Widget _buildCombinedRootList() {
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (error != null) {
+      return Center(child: Text(error!, style: const TextStyle(color: Colors.red, fontSize: 16)));
+    }
+
+    // Combine and sort all folders and files from both projects
+    final allFolders = _rootProjectFiles.where((f) => _isFolder(f.file)).toList();
+    final allFiles = _rootProjectFiles.where((f) => !_isFolder(f.file)).toList();
+
+    allFolders.sort((a, b) => a.file.name.toLowerCase().compareTo(b.file.name.toLowerCase()));
+    allFiles.sort((a, b) => a.file.name.toLowerCase().compareTo(b.file.name.toLowerCase()));
+
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      children: [
+        ...allFolders.map((f) => Container(
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          decoration: _cardDecoration(
+            color: Colors.deepPurple.withOpacity(0.08),
+          ),
+          child: ListTile(
+            leading: Container(
+              decoration: BoxDecoration(
+                color:Colors.deepPurple.withOpacity(0.40),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(6),
+              child: const Icon(Icons.folder, color: Colors.white, size: 32),
+            ),
+            title: Text(
+              f.file.name.replaceAll('/', '').replaceAll('_folder', ''),
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                color: Colors.white,
+                letterSpacing: 0.2,
+              ),
+            ),
+
+            onTap: () => _onTapItem(f.file, project: f.project),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            hoverColor: Colors.deepPurple.withOpacity(0.10),
+          ),
+        )),
+        ...allFiles.map((f) => Container(
+          margin: const EdgeInsets.symmetric(vertical: 10),
+          decoration: _cardDecoration(),
+          child: ListTile(
+            leading: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.40),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(6),
+                child: _isImage(f.file.name)
+                    ? const Icon(Icons.image, color: Colors.white, size: 28)
+                    : _isPdf(f.file.name)
+                        ? const Icon(Icons.picture_as_pdf, color: Colors.white, size: 28)
+                        : _isPptx(f.file.name)
+                            ? const Icon(Icons.slideshow, color: Colors.white, size: 28)
+                            : _isDocx(f.file.name)
+                                ? const Icon(Icons.description, color: Colors.white, size: 28)
+                                : _isXlsx(f.file.name)
+                                    ? const Icon(Icons.table_chart, color: Colors.white, size: 28)
+                                    : _isTxt(f.file.name)
+                                        ? const Icon(Icons.text_snippet, color: Colors.white, size: 28)
+                                        : const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
+              ),
+            ),
+            title: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Text(
+                f.file.name,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 18,
+                  color:Colors.deepPurple,
+                ),
+              ),
+            ),
+            onTap: () => _onTapItem(f.file, project: f.project),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            hoverColor:  Colors.deepPurple.withOpacity(0.07),
+            trailing: IconButton(
+              icon: const Icon(Icons.download_rounded, color: Colors.deepPurple, size: 26),
+              tooltip: 'Download',
+              onPressed: () {
+                _downloadFile(
+                  currentPath.isEmpty ? f.file.name : '$currentPath/${f.file.name}',
+                  f.file.name,
+                );
+              },
+            ),
+          ),
+        )),
+      ],
+    );
+  }
+}
