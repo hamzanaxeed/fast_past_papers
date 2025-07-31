@@ -18,6 +18,7 @@ import 'log.dart'; // <-- Add this import
 import 'view_Logs.dart'; // <-- Add this import
 import 'message_File.dart'; // <-- Add this import
 import 'options_Screen.dart';
+import 'main.dart'; // <-- Import for tempSupabaseClient
 
 class past_Papers_Screen extends StatefulWidget {
   const past_Papers_Screen({Key? key}) : super(key: key);
@@ -234,6 +235,30 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     );
   }
 
+  // Track which project is active
+  bool _useTempProject = false;
+
+  // Helper to get the current supabase client
+  SupabaseClient get _client {
+    // Use temp client for all paths if temp project is active
+    if (_useTempProject) {
+      return tempSupabaseClient;
+    }
+    return Supabase.instance.client;
+  }
+
+  // Helper to get the current bucket name
+  String get _bucketName {
+    // Use temp bucket for all paths if temp project is active
+    if (_useTempProject) {
+      return 'pastpaper1';
+    }
+    return 'pastpapers';
+  }
+
+  // Helper to get the current project name
+  String get _currentProjectName => _useTempProject ? "Temp Project" : "Main Project";
+
   Future<void> _loadFolder(String path) async {
     setState(() {
       loading = true;
@@ -247,15 +272,16 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     await fetchEditorEmails();
 
     try {
+      // Always use the correct client/bucket for the current path/project
       final response =
-      await Supabase.instance.client.storage.from('pastpapers').list(path: path);
+        _client.storage.from(_bucketName).list(path: path);
+      final result = await response;
       setState(() {
         currentPath = path;
-        items = response;
+        items = result;
         loading = false;
       });
-      // Log concise folder open event
-      logUserEvent('OpenFolder', details: path.isEmpty ? 'root' : path);
+      logUserEvent('OpenFolder', details: path.isEmpty ? 'root ($_currentProjectName)' : path);
       // Rebuild cache after folder load (only if file/folder changed)
       await _buildSearchCache();
     } catch (e) {
@@ -282,8 +308,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     } else if (_isImage(file.name)) {
       final filePath =
       currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
-      final url = Supabase.instance.client.storage
-          .from('pastpapers')
+      final url = _client.storage
+          .from(_bucketName)
           .getPublicUrl(filePath);
       logUserEvent('ViewImage', details: filePath);
       Navigator.push(
@@ -295,8 +321,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     } else if (_isPdf(file.name)) {
       final filePath =
       currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
-      final url = Supabase.instance.client.storage
-          .from('pastpapers')
+      final url = _client.storage
+          .from(_bucketName)
           .getPublicUrl(filePath);
       logUserEvent('ViewPDF', details: filePath);
       Navigator.push(
@@ -307,8 +333,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       );
     } else if (_isPptx(file.name) || _isDocx(file.name) || _isXlsx(file.name) || _isTxt(file.name)) {
       final filePath = currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
-      final url = Supabase.instance.client.storage
-          .from('pastpapers')
+      final url = _client.storage
+          .from(_bucketName)
           .getPublicUrl(filePath);
       logUserEvent('ViewOther', details: filePath);
       // Use push, not pushAndRemoveUntil, so back returns to last folder
@@ -418,8 +444,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       } else {
         final oldPath = currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
         final newPath = currentPath.isEmpty ? newName : '$currentPath/$newName';
-        await Supabase.instance.client.storage
-            .from('pastpapers')
+        await _client.storage
+            .from(_bucketName)
             .move(oldPath, newPath);
         logUserEvent('Renamed File', details: '$oldPath -> $newPath');
       }
@@ -436,8 +462,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   }
 
   Future<void> _moveFolderRecursively(String oldPath, String newPath) async {
-    final contents = await Supabase.instance.client.storage
-        .from('pastpapers')
+    final contents = await _client.storage
+        .from(_bucketName)
         .list(path: oldPath);
     for (final item in contents) {
       final oldItemPath = '$oldPath/${item.name}';
@@ -445,15 +471,15 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       if (_isFolder(item)) {
         await _moveFolderRecursively(oldItemPath, newItemPath);
       } else {
-        await Supabase.instance.client.storage
-            .from('pastpapers')
+        await _client.storage
+            .from(_bucketName)
             .move(oldItemPath, newItemPath);
       }
     }
     // Optionally, remove the old folder's .keep file if present
     try {
-      await Supabase.instance.client.storage
-          .from('pastpapers')
+      await _client.storage
+          .from(_bucketName)
           .remove(['$oldPath/.keep']);
     } catch (_) {}
   }
@@ -498,8 +524,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                 ? file.name
                 : '$currentPath/${file.name}';
             print('DEBUG: Deleting file: $filePath');
-            await Supabase.instance.client.storage
-                .from('pastpapers')
+            await _client.storage
+                .from(_bucketName)
                 .remove([filePath]);
             logUserEvent('Deleted File', details: filePath);
           }
@@ -523,8 +549,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   // Recursively delete all files and subfolders in a folder
   Future<void> _deleteFolderRecursively(String folderPath) async {
     print('DEBUG: Entering _deleteFolderRecursively for $folderPath');
-    final contents = await Supabase.instance.client.storage
-        .from('pastpapers')
+    final contents = await _client.storage
+        .from(_bucketName)
         .list(path: folderPath);
     print('DEBUG: $folderPath contents: ${contents.map((e) => e.name).toList()}');
     for (final item in contents) {
@@ -534,8 +560,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         await _deleteFolderRecursively(itemPath);
       } else {
         print('DEBUG: Deleting file in folder: $itemPath');
-        await Supabase.instance.client.storage
-            .from('pastpapers')
+        await _client.storage
+            .from(_bucketName)
             .remove([itemPath]);
         logUserEvent('Deleted File', details: itemPath);
       }
@@ -544,8 +570,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     final keepPath = '$folderPath/.keep';
     try {
       print('DEBUG: Attempting to remove .keep file: $keepPath');
-      await Supabase.instance.client.storage
-          .from('pastpapers')
+      await _client.storage
+          .from(_bucketName)
           .remove([keepPath]);
       logUserEvent('Deleted .keep File', details: keepPath);
     } catch (e) {
@@ -582,7 +608,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       return _folderCounts[folderPath]!;
     }
     try {
-      final contents = await Supabase.instance.client.storage.from('pastpapers').list(path: folderPath);
+      final contents = await _client.storage.from(_bucketName).list(path: folderPath);
       final count = contents.where((f) => f.name != '.keep' && f.name != '.emptyFolderPlaceholder').length;
       _folderCounts[folderPath] = count;
       return count;
@@ -602,7 +628,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   ) async {
     acc ??= [];
     if (depth > maxDepth || acc.length > maxResults) return acc;
-    final items = await Supabase.instance.client.storage.from('pastpapers').list(path: path);
+    final items = await _client.storage.from(_bucketName).list(path: path);
     print('DEBUG: Fetching items at path "$path" (depth $depth): ${items.map((e) => e.name).join(', ')}'); // Debug log
     for (final item in items) {
       final itemPath = path.isEmpty ? item.name : '$path/${item.name}';
@@ -1005,7 +1031,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
 
     Future.microtask(() async {
       try {
-        final url = Supabase.instance.client.storage.from('pastpapers').getPublicUrl(filePath);
+        final url = _client.storage.from(_bucketName).getPublicUrl(filePath);
         final request = http.Request('GET', Uri.parse(url));
         final response = await request.send();
 
@@ -1127,8 +1153,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         final filePath = currentPath.isEmpty
             ? file.name
             : '$currentPath/${file.name}';
-        await Supabase.instance.client.storage
-            .from('pastpapers')
+        await _client.storage
+            .from(_bucketName)
             .remove([filePath]);
         logUserEvent('Deleted File', details: filePath);
       }
@@ -1177,16 +1203,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           : currentPath + (currentPath.endsWith('/') ? '' : '/') + safeName;
       final tempFile = await File('${Directory.systemTemp.path}/.keep').create();
       await tempFile.writeAsBytes([]);
-      await Supabase.instance.client
+      await _client
           .storage
-          .from('pastpapers')
+          .from(_bucketName)
           .upload('$folderPath/.keep', tempFile,
           fileOptions: const FileOptions(upsert: false));
       await tempFile.delete();
       _folderCounts.clear(); // Clear cache before refresh
       await _loadFolder(currentPath); // Ensure refresh after folder creation
-      // --- Log edit event for folder creation ---
-    //  final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       print('DEBUG: Created folder at ==================$folderPath');
       await logEditEvent('Created folder: $folderPath');
     }
@@ -1330,15 +1354,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final fileName = picked.name;
       final uploadPath =
           currentPath.isEmpty ? fileName : '$currentPath/$fileName';
-      await Supabase.instance.client
+      await _client
           .storage
-          .from('pastpapers')
+          .from(_bucketName)
           .upload(uploadPath, file,
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache();
-      // --- Log edit event for file creation (image) ---
       print('DEBUG: Created folder at ==================$uploadPath');
       await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
@@ -1347,16 +1370,13 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final file = File(result.files.single.path!);
       final fileName = result.files.single.name;
       final uploadPath = currentPath.isEmpty ? fileName : '$currentPath/$fileName';
-      await Supabase.instance.client
+      await _client
           .storage
-          .from('pastpapers')
+          .from(_bucketName)
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache();
-
-      // --- Log edit event for file creation (pdf) ---
-      final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       print('DEBUG: Created folder at ==================$uploadPath');
       await logEditEvent('Uploaded PDF: $uploadPath');
     }
@@ -1499,16 +1519,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final file = File(picked.path);
       final fileName = picked.name;
       final uploadPath = targetPath.isEmpty ? fileName : '$targetPath/$fileName';
-      await Supabase.instance.client
+      await _client
           .storage
-          .from('pastpapers')
+          .from(_bucketName)
           .upload(uploadPath, file,
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache();
-      // --- Log edit event for file creation (image) ---
-      //final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       print('DEBUG: Created folder at ==================$uploadPath');
       await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
@@ -1517,15 +1535,13 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final file = File(result.files.single.path!);
       final fileName = result.files.single.name;
       final uploadPath = targetPath.isEmpty ? fileName : '$targetPath/$fileName';
-      await Supabase.instance.client
+      await _client
           .storage
-          .from('pastpapers')
+          .from(_bucketName)
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath);
       await _buildSearchCache();
-      // --- Log edit event for file creation (pdf) ---
-   //   final email = FirebaseAuth.instance.currentUser?.email ?? 'anonymous';
       print('DEBUG: Created folder at ==================$uploadPath');
       await logEditEvent('Uploaded PDF: $uploadPath');
     }
@@ -1558,6 +1574,62 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     });
   }
 
+  // Update all Supabase.instance.client usages to _client
+  // Example: Supabase.instance.client.storage.from('pastpapers') => _client.storage.from('pastpapers')
+  // Do this for all methods that access Supabase (fetch, upload, delete, etc.)
+
+  // Do the same for all other methods that use Supabase.instance.client
+  // For brevity, only show the pattern:
+  // Replace all Supabase.instance.client with _client in this file.
+
+  // Add a toggle button at the root to switch projects
+  Widget _buildProjectToggle() {
+    if (currentPath.isNotEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text("Project: ", style: TextStyle(fontWeight: FontWeight.bold)),
+          ChoiceChip(
+            label: const Text("Main"),
+            selected: !_useTempProject,
+            onSelected: (selected) async {
+              if (_useTempProject) {
+                setState(() {
+                  _useTempProject = false;
+                  _allFilesCache = [];
+                  _folderCounts.clear();
+                  currentPath = '';
+                });
+                await _loadFolder('');
+                await _buildSearchCache();
+              }
+            },
+          ),
+          const SizedBox(width: 10),
+          ChoiceChip(
+            label: const Text("Temp"),
+            selected: _useTempProject,
+            onSelected: (selected) async {
+              if (!_useTempProject) {
+                setState(() {
+                  _useTempProject = true;
+                  _allFilesCache = [];
+                  _folderCounts.clear();
+                  currentPath = '';
+                });
+                await _loadFolder('');
+                await _buildSearchCache();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // In build(), show the toggle at the root
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<bool>(
@@ -1832,6 +1904,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
                       child: Column(
                         children: [
+                          _buildProjectToggle(), // <-- Add this line
                           _buildSearchBar(),
                           const SizedBox(height: 8),
                           Expanded(
@@ -1951,3 +2024,4 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     );
   }
 }
+

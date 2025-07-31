@@ -124,14 +124,44 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
     return parts.join(' / ');
   }
 
+  // Card decoration copied from welcome_Screen.dart
+  BoxDecoration _cardDecoration({Color? color}) => BoxDecoration(
+        color: color ?? Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple.withOpacity(0.10),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+        border: Border.all(color: Colors.deepPurple.withOpacity(0.08), width: 1),
+      );
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(displayPath),
-          backgroundColor: Colors.deepOrange,
+          title: Text(
+            displayPath,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 24,
+              letterSpacing: 1.1,
+              shadows: [
+                Shadow(
+                  color: Colors.black26,
+                  blurRadius: 8,
+                  offset: Offset(1, 2),
+                ),
+              ],
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          backgroundColor: Colors.deepPurple,
           foregroundColor: Colors.white,
           leading: currentPath.isNotEmpty
               ? IconButton(
@@ -162,18 +192,7 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
                         if (_isFolder(file)) {
                           return Container(
                             margin: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: Colors.deepPurple.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.deepPurple.withOpacity(0.10),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                              border: Border.all(color: Colors.deepPurple.withOpacity(0.08), width: 1),
-                            ),
+                            decoration: _cardDecoration(color: Colors.deepPurple.withOpacity(0.08)),
                             child: ListTile(
                               leading: Container(
                                 decoration: BoxDecoration(
@@ -200,18 +219,7 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
                         } else {
                           return Container(
                             margin: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.deepPurple.withOpacity(0.10),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                              border: Border.all(color: Colors.deepPurple.withOpacity(0.08), width: 1),
-                            ),
+                            decoration: _cardDecoration(),
                             child: ListTile(
                               leading: Container(
                                 decoration: BoxDecoration(

@@ -11,6 +11,9 @@ import 'log.dart';
 import 'options_Screen.dart'; // <-- Add this import
 import 'message_File.dart'; // <-- Add this import
 import 'dart:io' as io;
+
+late final SupabaseClient tempSupabaseClient;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -19,6 +22,11 @@ void main() async {
   await Supabase.initialize(
     url: 'https://seutsksnrtvazixtrraq.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNldXRza3NucnR2YXppeHRycmFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTExODQ1OTIsImV4cCI6MjA2Njc2MDU5Mn0.AmVZJewqpcB9Om0T0olCDgSCbDr5vzNpWCHeyLL0GPI',
+  );
+
+  tempSupabaseClient = SupabaseClient(
+    'https://yzvmemyxwgcjrjelrsjy.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6dm1lbXl4d2djanJqZWxyc2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MTczNTYsImV4cCI6MjA2OTM5MzM1Nn0.UtFhYpJUstSjZPtYdjvglmsrGriXA2iu6ElFBVLRqro',
   );
 
   final prefs = await SharedPreferences.getInstance();
