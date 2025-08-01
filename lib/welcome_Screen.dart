@@ -654,17 +654,31 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   bool _isTxt(String name) => name.toLowerCase().endsWith('.txt');
 
   // Add this method to get the number of items in a folder (with cache)
-  Future<int> _getFolderItemCount(String folderPath) async {
-    if (_folderCounts.containsKey(folderPath)) {
-      return _folderCounts[folderPath]!;
+  Future<int> _getFolderItemCount(String folderPath, {String? project}) async {
+    final cacheKey = project != null ? '$project::$folderPath' : folderPath;
+    if (_folderCounts.containsKey(cacheKey)) {
+      return _folderCounts[cacheKey]!;
     }
     try {
-      final contents = await _client.storage.from(_bucketName).list(path: folderPath);
-      final count = contents.where((f) => f.name != '.keep' && f.name != '.emptyFolderPlaceholder').length;
-      _folderCounts[folderPath] = count;
+      final client = project != null ? _getClient(project) : _client;
+      final bucket = project != null ? _getBucket(project) : _bucketName;
+      final contents = await client.storage.from(bucket).list(path: folderPath);
+
+      // Only count visible folders/files (exclude .keep, .emptyFolderPlaceholder)
+      final visible = contents.where((f) =>
+        f.name != '.keep' &&
+        f.name != '.emptyFolderPlaceholder'
+      ).toList();
+
+      // If you want to count only folders inside, use:
+      // final count = visible.where((f) => _isFolder(f)).length;
+      // If you want to count both files and folders, use:
+      final count = visible.length;
+
+      _folderCounts[cacheKey] = count;
       return count;
     } catch (e) {
-      print('Error fetching folder count for $folderPath: $e'); // Add this line
+      print('Error fetching folder count for $folderPath: $e');
       return 0;
     }
   }
@@ -911,7 +925,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     // Exclude .emptyFolderPlaceholder from folders and files
     final folders = items
         .where(_isFolder)
-        .where((f) => f.name != '.emptyFolderPlaceholder')
+        .where((f) => f.name != '.emptyFolderPlaceholder' && f.name != '.keep')
         .toList();
     final files = items
         .where((f) => !_isFolder(f) && f.name != '.keep' && f.name != '.emptyFolderPlaceholder')
@@ -943,8 +957,9 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           builder: (context, snapshot) {
             final admin = snapshot.data ?? false;
             final folderPath = currentPath.isEmpty ? f.name : '$currentPath/${f.name}';
+            // Pass _currentProject for correct count in temp/main
             return FutureBuilder<int>(
-              future: _getFolderItemCount(folderPath),
+              future: _getFolderItemCount(folderPath, project: _currentProject),
               builder: (context, countSnapshot) {
                 final count = countSnapshot.data;
                 final isSecondLevel = currentPath.split('/').where((e) => e.isNotEmpty).length == 1;
@@ -1039,9 +1054,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               child: Text(
                 f.name,
                 style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 18,
-                    color: Colors.deepPurple),
+                    fontWeight: FontWeight.w600, fontSize: 18, color: Colors.deepPurple),
               ),
             ),
             subtitle: null,
@@ -1054,7 +1067,11 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               icon: const Icon(Icons.download_rounded, color: Colors.deepPurple, size: 26),
               tooltip: 'Download',
               onPressed: () {
-                _downloadFile(currentPath.isEmpty ? f.name : '$currentPath/${f.name}', f.name);
+                _downloadFile(
+                  currentPath.isEmpty ? f.name : '$currentPath/${f.name}',
+                  f.name,
+                  project: _currentProject,
+                );
               },
             ),
           ),
@@ -1071,7 +1088,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   String? _downloadFileName;
 
   // Download file to local storage (Downloads directory or best available)
-  Future<void> _downloadFile(String filePath, String fileName) async {
+  Future<void> _downloadFile(String filePath, String fileName, {String? project}) async {
     setState(() {
       _downloading = true;
       _downloadProgress = 0.0;
@@ -1082,7 +1099,25 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
 
     Future.microtask(() async {
       try {
-        final url = _client.storage.from(_bucketName).getPublicUrl(filePath);
+        // --- Use correct client/bucket for the file ---
+        String proj;
+        if (currentPath.isEmpty) {
+          // At root, try to detect project from _rootProjectFiles
+          final pf = _rootProjectFiles.firstWhere(
+            (f) => f.file.name == fileName,
+            orElse: () => _ProjectFile(FileObject(name: fileName, id: '', updatedAt: '', createdAt: '', lastAccessedAt: '',metadata: {},
+                bucketId: '',      // <-- add this
+                owner: '',         // <-- add this
+                buckets: null), 'main', fileName),
+          );
+          proj = pf.project;
+        } else {
+          proj = _currentProject ?? 'main';
+        }
+        final client = _getClient(proj);
+        final bucket = _getBucket(proj);
+
+        final url = client.storage.from(bucket).getPublicUrl(filePath);
         final request = http.Request('GET', Uri.parse(url));
         final response = await request.send();
 
@@ -1252,16 +1287,28 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final folderPath = currentPath.isEmpty
           ? safeName
           : currentPath + (currentPath.endsWith('/') ? '' : '/') + safeName;
+
+      // Always use the correct project/bucket for the current folder
+      String project;
+      if (currentPath.isEmpty) {
+        // At root, use main project by default (or you can add logic to use temp if needed)
+        project = 'main';
+      } else {
+        project = _currentProject ?? 'main';
+      }
+      final client = _getClient(project);
+      final bucket = _getBucket(project);
+
       final tempFile = await File('${Directory.systemTemp.path}/.keep').create();
       await tempFile.writeAsBytes([]);
-      await _client
+      await client
           .storage
-          .from(_bucketName)
+          .from(bucket)
           .upload('$folderPath/.keep', tempFile,
           fileOptions: const FileOptions(upsert: false));
       await tempFile.delete();
       _folderCounts.clear(); // Clear cache before refresh
-      await _loadFolder(currentPath); // Ensure refresh after folder creation
+      await _loadFolder(currentPath, project: project); // Ensure refresh after folder creation
       print('DEBUG: Created folder at ==================$folderPath');
       await logEditEvent('Created folder: $folderPath');
     }
@@ -1374,6 +1421,17 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     );
     if (type == null) return;
 
+    // Always use the correct project/bucket for the current folder
+    String project;
+    if (currentPath.isEmpty) {
+      // At root, use main project by default (or you can add logic to use temp if needed)
+      project = 'main';
+    } else {
+      project = _currentProject ?? 'main';
+    }
+    final client = _getClient(project);
+    final bucket = _getBucket(project);
+
     if (type == 'image') {
       // --- Ask for gallery or camera ---
       final source = await showDialog<ImageSource>(
@@ -1405,15 +1463,15 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final fileName = picked.name;
       final uploadPath =
           currentPath.isEmpty ? fileName : '$currentPath/$fileName';
-      await _client
+      await client
           .storage
-          .from(_bucketName)
+          .from(bucket)
           .upload(uploadPath, file,
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
-      await _loadFolder(currentPath);
+      await _loadFolder(currentPath, project: project);
       await _buildSearchCache();
-      print('DEBUG: Created folder at ==================$uploadPath');
+      print('DEBUG: Uploaded image at ==================$uploadPath');
       await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
       final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
@@ -1421,14 +1479,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final file = File(result.files.single.path!);
       final fileName = result.files.single.name;
       final uploadPath = currentPath.isEmpty ? fileName : '$currentPath/$fileName';
-      await _client
+      await client
           .storage
-          .from(_bucketName)
+          .from(bucket)
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
-      await _loadFolder(currentPath);
+      await _loadFolder(currentPath, project: project);
       await _buildSearchCache();
-      print('DEBUG: Created folder at ==================$uploadPath');
+      print('DEBUG: Uploaded PDF at ==================$uploadPath');
       await logEditEvent('Uploaded PDF: $uploadPath');
     }
   }
@@ -1540,6 +1598,16 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     );
     if (type == null) return;
 
+    // Always use the correct project/bucket for the current folder
+    String project;
+    if (currentPath.isEmpty) {
+      project = 'main';
+    } else {
+      project = _currentProject ?? 'main';
+    }
+    final client = _getClient(project);
+    final bucket = _getBucket(project);
+
     if (type == 'image') {
       // --- Ask for gallery or camera ---
       final source = await showDialog<ImageSource>(
@@ -1570,15 +1638,15 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final file = File(picked.path);
       final fileName = picked.name;
       final uploadPath = targetPath.isEmpty ? fileName : '$targetPath/$fileName';
-      await _client
+      await client
           .storage
-          .from(_bucketName)
+          .from(bucket)
           .upload(uploadPath, file,
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
-      await _loadFolder(currentPath);
+      await _loadFolder(currentPath, project: project);
       await _buildSearchCache();
-      print('DEBUG: Created folder at ==================$uploadPath');
+      print('DEBUG: Uploaded image at ==================$uploadPath');
       await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
       final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
@@ -1586,14 +1654,14 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       final file = File(result.files.single.path!);
       final fileName = result.files.single.name;
       final uploadPath = targetPath.isEmpty ? fileName : '$targetPath/$fileName';
-      await _client
+      await client
           .storage
-          .from(_bucketName)
+          .from(bucket)
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
-      await _loadFolder(currentPath);
+      await _loadFolder(currentPath, project: project);
       await _buildSearchCache();
-      print('DEBUG: Created folder at ==================$uploadPath');
+      print('DEBUG: Uploaded PDF at ==================$uploadPath');
       await logEditEvent('Uploaded PDF: $uploadPath');
     }
   }
@@ -2040,8 +2108,13 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     }
 
     // Combine and sort all folders and files from both projects
-    final allFolders = _rootProjectFiles.where((f) => _isFolder(f.file)).toList();
-    final allFiles = _rootProjectFiles.where((f) => !_isFolder(f.file)).toList();
+    final allFolders = _rootProjectFiles
+        .where((f) => _isFolder(f.file))
+        .where((f) => f.file.name != '.emptyFolderPlaceholder' && f.file.name != '.keep')
+        .toList();
+    final allFiles = _rootProjectFiles
+        .where((f) => !_isFolder(f.file) && f.file.name != '.keep' && f.file.name != '.emptyFolderPlaceholder')
+        .toList();
 
     allFolders.sort((a, b) => a.file.name.toLowerCase().compareTo(b.file.name.toLowerCase()));
     allFiles.sort((a, b) => a.file.name.toLowerCase().compareTo(b.file.name.toLowerCase()));
@@ -2049,34 +2122,60 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
       children: [
-        ...allFolders.map((f) => Container(
-          margin: const EdgeInsets.symmetric(vertical: 10),
-          decoration: _cardDecoration(
-            color: Colors.deepPurple.withOpacity(0.08),
-          ),
-          child: ListTile(
-            leading: Container(
-              decoration: BoxDecoration(
-                color:Colors.deepPurple.withOpacity(0.40),
-                borderRadius: BorderRadius.circular(12),
+        ...allFolders.map((f) => FutureBuilder<int>(
+          future: _getFolderItemCount(f.file.name, project: f.project),
+          builder: (context, countSnapshot) {
+            final count = countSnapshot.data;
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: _cardDecoration(
+                color: Colors.deepPurple.withOpacity(0.08),
               ),
-              padding: const EdgeInsets.all(6),
-              child: const Icon(Icons.folder, color: Colors.white, size: 32),
-            ),
-            title: Text(
-              f.file.name.replaceAll('/', '').replaceAll('_folder', ''),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 20,
-                color: Colors.white,
-                letterSpacing: 0.2,
+              child: ListTile(
+                leading: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.withOpacity(0.40),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: const Icon(Icons.folder, color: Colors.white, size: 32),
+                ),
+                title: Text(
+                  f.file.name.replaceAll('/', '').replaceAll('_folder', ''),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    color: Colors.white,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                trailing: count == null
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        child: Text(
+                          '$count',
+                          style: const TextStyle(
+                            color: Colors.deepPurple,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                onTap: () => _onTapItem(f.file, project: f.project),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                hoverColor: Colors.deepPurple.withOpacity(0.10),
               ),
-            ),
-
-            onTap: () => _onTapItem(f.file, project: f.project),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            hoverColor: Colors.deepPurple.withOpacity(0.10),
-          ),
+            );
+          },
         )),
         ...allFiles.map((f) => Container(
           margin: const EdgeInsets.symmetric(vertical: 10),
@@ -2112,20 +2211,21 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 18,
-                  color:Colors.deepPurple,
+                  color: Colors.deepPurple,
                 ),
               ),
             ),
             onTap: () => _onTapItem(f.file, project: f.project),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            hoverColor:  Colors.deepPurple.withOpacity(0.07),
+            hoverColor: Colors.deepPurple.withOpacity(0.07),
             trailing: IconButton(
               icon: const Icon(Icons.download_rounded, color: Colors.deepPurple, size: 26),
               tooltip: 'Download',
               onPressed: () {
                 _downloadFile(
-                  currentPath.isEmpty ? f.file.name : '$currentPath/${f.file.name}',
                   f.file.name,
+                  f.file.name,
+                  project: f.project,
                 );
               },
             ),
