@@ -562,32 +562,38 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       });
       try {
         for (final file in _selectedItems) {
-          print('DEBUG: Processing ${file.name}');
+          // --- Determine project for each file ---
+          String project = _currentProject ?? 'main';
+          if (currentPath.isEmpty) {
+            // At root, find project from _rootProjectFiles
+            final pf = _rootProjectFiles.firstWhere(
+              (f) => f.file.name == file.name,
+              orElse: () => _ProjectFile(file, 'main', file.name),
+            );
+            project = pf.project;
+          }
           if (_isFolder(file)) {
             final folderPath = currentPath.isEmpty
                 ? file.name
                 : '$currentPath/${file.name}';
-            print('DEBUG: Deleting folder recursively: $folderPath');
-            await _deleteFolderRecursively(folderPath);
+            await _deleteFolderRecursively(folderPath, project: project);
             logUserEvent('Deleted Folder', details: folderPath);
           } else {
             final filePath = currentPath.isEmpty
                 ? file.name
                 : '$currentPath/${file.name}';
-            print('DEBUG: Deleting file: $filePath');
-            await _client.storage
-                .from(_bucketName)
+            await _getClient(project)
+                .storage
+                .from(_getBucket(project))
                 .remove([filePath]);
             logUserEvent('Deleted File', details: filePath);
           }
         }
-        print('DEBUG: Finished deleting selected items');
         _clearSelection();
         _folderCounts.clear(); // Clear cache before refresh
-        await _loadFolder(currentPath); // Ensure refresh after multi-delete
+        await _loadFolder(currentPath, project: _currentProject); // Ensure refresh after multi-delete
         await _buildSearchCache(); // <-- Add this
       } catch (e) {
-        print('DEBUG: Error during deletion: $e');
         setState(() {
           error = 'Failed to delete: $e';
           loading = false;
@@ -598,35 +604,25 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   }
 
   // Recursively delete all files and subfolders in a folder
-  Future<void> _deleteFolderRecursively(String folderPath) async {
-    print('DEBUG: Entering _deleteFolderRecursively for $folderPath');
-    final contents = await _client.storage
-        .from(_bucketName)
-        .list(path: folderPath);
-    print('DEBUG: $folderPath contents: ${contents.map((e) => e.name).toList()}');
+  Future<void> _deleteFolderRecursively(String folderPath, {String? project}) async {
+    final client = project != null ? _getClient(project) : _client;
+    final bucket = project != null ? _getBucket(project) : _bucketName;
+    final contents = await client.storage.from(bucket).list(path: folderPath);
     for (final item in contents) {
       final itemPath = '$folderPath/${item.name}';
       if (item.name.endsWith('_folder')) {
-        print('DEBUG: Recursing into subfolder: $itemPath');
-        await _deleteFolderRecursively(itemPath);
+        await _deleteFolderRecursively(itemPath, project: project);
       } else {
-        print('DEBUG: Deleting file in folder: $itemPath');
-        await _client.storage
-            .from(_bucketName)
-            .remove([itemPath]);
+        await client.storage.from(bucket).remove([itemPath]);
         logUserEvent('Deleted File', details: itemPath);
       }
     }
     // Optionally, remove the .keep file if present
     final keepPath = '$folderPath/.keep';
     try {
-      print('DEBUG: Attempting to remove .keep file: $keepPath');
-      await _client.storage
-          .from(_bucketName)
-          .remove([keepPath]);
+      await client.storage.from(bucket).remove([keepPath]);
       logUserEvent('Deleted .keep File', details: keepPath);
     } catch (e) {
-      print('DEBUG: Could not remove .keep file: $e');
       logUserEvent('Delete .keep Failed', details: '$keepPath | $e');
     }
   }
@@ -1228,24 +1224,33 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       error = null;
     });
     try {
+      // --- Determine project for the file ---
+      String project = _currentProject ?? 'main';
+      if (currentPath.isEmpty) {
+        final pf = _rootProjectFiles.firstWhere(
+          (f) => f.file.name == file.name,
+          orElse: () => _ProjectFile(file, 'main', file.name),
+        );
+        project = pf.project;
+      }
       if (isFolder) {
-        // Use recursive delete for folders
         final folderPath = currentPath.isEmpty
             ? file.name
             : '$currentPath/${file.name}';
-        await _deleteFolderRecursively(folderPath);
+        await _deleteFolderRecursively(folderPath, project: project);
         logUserEvent('Deleted Folder', details: folderPath);
       } else {
         final filePath = currentPath.isEmpty
             ? file.name
             : '$currentPath/${file.name}';
-        await _client.storage
-            .from(_bucketName)
+        await _getClient(project)
+            .storage
+            .from(_getBucket(project))
             .remove([filePath]);
         logUserEvent('Deleted File', details: filePath);
       }
       _folderCounts.clear(); // Clear cache before refresh
-      await _loadFolder(currentPath); // Ensure refresh after delete
+      await _loadFolder(currentPath, project: _currentProject); // Ensure refresh after delete
       await _buildSearchCache(); // <-- Add this
     } catch (e) {
       setState(() {
