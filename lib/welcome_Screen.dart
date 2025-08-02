@@ -42,7 +42,8 @@ class past_Papers_Screen extends StatefulWidget {
 class _SearchResult {
   final FileObject file;
   final String fullPath;
-  _SearchResult(this.file, this.fullPath);
+  final String project; // <-- Add project info
+  _SearchResult(this.file, this.fullPath, this.project);
 }
 
 class _ProjectFile {
@@ -89,7 +90,72 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
   // Add this flag to track cache building
   bool _buildingCache = false;
 
-  // String _pendingSearchQuery = ''; // Track last search query while cache is building
+  // Build the search cache for both projects
+  Future<void> _buildSearchCache() async {
+    setState(() {
+      _buildingCache = true;
+    });
+    // Fetch from both projects and combine
+    final mainFuture = _fetchAllFilesAndFolders('', 0, 2, 500, null, 'main');
+    final tempFuture = _fetchAllFilesAndFolders('', 0, 2, 500, null, 'temp');
+    final results = await Future.wait([mainFuture, tempFuture]);
+    if (mounted) {
+      setState(() {
+        _allFilesCache = [...results[0], ...results[1]];
+        _buildingCache = false;
+      });
+      if (_pendingSearchQuery.isNotEmpty) {
+        _updateSearchResults(_pendingSearchQuery);
+      }
+    }
+  }
+
+  // Recursively fetch all files/folders under a given path for global search
+  Future<List<_SearchResult>> _fetchAllFilesAndFolders(
+    [String path = '',
+    int depth = 0,
+    int maxDepth = 4,
+    int maxResults = 2000,
+    List<_SearchResult>? acc,
+    String project = 'main']
+  ) async {
+    acc ??= [];
+    if (depth > maxDepth || acc.length > maxResults) return acc;
+    final client = _getClient(project);
+    final bucket = _getBucket(project);
+    final items = await client.storage.from(bucket).list(path: path);
+    for (final item in items) {
+      final itemPath = path.isEmpty ? item.name : '$path/${item.name}';
+      acc.add(_SearchResult(item, itemPath, project)); // <-- Store project info
+      if (_isFolder(item)) {
+        if (acc.length > maxResults) break;
+        await _fetchAllFilesAndFolders(itemPath, depth + 1, maxDepth, maxResults, acc, project);
+        if (acc.length > maxResults) break;
+      }
+    }
+    return acc;
+  }
+
+  // Update search results to use combined cache and project info
+  void _updateSearchResults(String query) {
+    if (_allFilesCache.isNotEmpty) {
+      final result = _allFilesCache.where((f) =>
+        f.file.name.toLowerCase().contains(query) ||
+        f.fullPath.toLowerCase().contains(query)
+      ).toList();
+      setState(() {
+        _globalSearchResults = result;
+        _globalSearchLoading = false;
+      });
+      logUserEvent('Search', details: query);
+    } else {
+      setState(() {
+        _globalSearchResults = [];
+        _globalSearchLoading = true;
+      });
+      _pendingSearchQuery = query;
+    }
+  }
 
   // Always fetch editor emails before checking roles
   Future<void> fetchEditorEmails() async {
@@ -169,7 +235,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       _loadFolder('');
       logUserEvent('InitLoad');
     });
-    _buildSearchCache();
+    _buildSearchCache(); // <-- Only build cache once at startup
     // Listen for real-time changes in Editors table
     _editorSub = Supabase.instance.client
         .from('Editors')
@@ -185,45 +251,6 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         editorsFetched = true;
       });
     });
-  }
-
-  // Build the search cache once at app start or after changes
-  Future<void> _buildSearchCache() async {
-    setState(() {
-      _buildingCache = true;
-    });
-    _cachedFilesFuture = _fetchAllFilesAndFolders('', 0, 2, 500);
-    final list = await _cachedFilesFuture;
-    if (mounted) {
-      setState(() {
-        _allFilesCache = list;
-        _buildingCache = false;
-      });
-      // If there was a pending search query, update results now
-      if (_pendingSearchQuery.isNotEmpty) {
-        _updateSearchResults(_pendingSearchQuery);
-      }
-    }
-  }
-
-  void _updateSearchResults(String query) {
-    if (_allFilesCache.isNotEmpty) {
-      final result = _allFilesCache.where((f) =>
-        f.file.name.toLowerCase().contains(query) ||
-        f.fullPath.toLowerCase().contains(query)
-      ).toList();
-      setState(() {
-        _globalSearchResults = result;
-        _globalSearchLoading = false;
-      });
-      logUserEvent('Search', details: query);
-    } else {
-      setState(() {
-        _globalSearchResults = [];
-        _globalSearchLoading = true;
-      });
-      _pendingSearchQuery = query; // Save query for when cache is ready
-    }
   }
 
   @override
@@ -323,8 +350,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         });
       }
       logUserEvent('OpenFolder', details: path.isEmpty ? 'root (both projects)' : path);
-      // Rebuild cache after folder load (only if file/folder changed)
-      await _buildSearchCache();
+      // REMOVE: await _buildSearchCache();
     } catch (e) {
       setState(() {
         error = 'Failed to load folder: $e';
@@ -502,7 +528,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       }
       _folderCounts.clear(); // Clear cache before refresh
       await _loadFolder(currentPath); // Ensure refresh after rename
-      await _buildSearchCache(); // <-- Add this
+      // REMOVE: await _buildSearchCache();
     } catch (e) {
       setState(() {
         error = 'Failed to rename: $e';
@@ -592,7 +618,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         _clearSelection();
         _folderCounts.clear(); // Clear cache before refresh
         await _loadFolder(currentPath, project: _currentProject); // Ensure refresh after multi-delete
-        await _buildSearchCache(); // <-- Add this
+        // REMOVE: await _buildSearchCache();
       } catch (e) {
         setState(() {
           error = 'Failed to delete: $e';
@@ -678,30 +704,6 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       return 0;
     }
   }
-  // Recursively fetch all files/folders under a given path for global search
-  // Add maxDepth and maxResults to speed up search and avoid excessive recursion
-  Future<List<_SearchResult>> _fetchAllFilesAndFolders(
-    [String path = '',
-    int depth = 0,
-    int maxDepth = 4,
-    int maxResults = 2000,
-    List<_SearchResult>? acc]
-  ) async {
-    acc ??= [];
-    if (depth > maxDepth || acc.length > maxResults) return acc;
-    final items = await _client.storage.from(_bucketName).list(path: path);
-    print('DEBUG: Fetching items at path "$path" (depth $depth): ${items.map((e) => e.name).join(', ')}'); // Debug log
-    for (final item in items) {
-      final itemPath = path.isEmpty ? item.name : '$path/${item.name}';
-      acc.add(_SearchResult(item, itemPath));
-      if (_isFolder(item)) {
-        if (acc.length > maxResults) break;
-        await _fetchAllFilesAndFolders(itemPath, depth + 1, maxDepth, maxResults, acc);
-        if (acc.length > maxResults) break;
-      }
-    }
-    return acc;
-  }
 
   // Update card decoration to match OptionsScreen
   BoxDecoration _cardDecoration({Color? color}) => BoxDecoration(
@@ -771,10 +773,149 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
 
   // Update list view for folders/files to match theme
   Widget _buildList() {
+
+    if (loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     // Show loading only if cache is building and no results yet
     if ((_globalSearchLoading || _buildingCache) && searchQuery.isNotEmpty && _globalSearchResults.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
+// Dart
+    if (currentPath.isEmpty && searchQuery.isEmpty) {
+      final allFolders = _rootProjectFiles
+          .where((f) => _isFolder(f.file))
+          .where((f) => f.file.name != '.emptyFolderPlaceholder' && f.file.name != '.keep')
+          .toList();
+      final allFiles = _rootProjectFiles
+          .where((f) => !_isFolder(f.file) && f.file.name != '.keep' && f.file.name != '.emptyFolderPlaceholder')
+          .toList();
+
+      allFolders.sort((a, b) => a.file.name.toLowerCase().compareTo(b.file.name.toLowerCase()));
+      allFiles.sort((a, b) => a.file.name.toLowerCase().compareTo(b.file.name.toLowerCase()));
+
+      return ListView(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        children: [
+          ...allFolders.map((f) => FutureBuilder<bool>(
+            future: isAdmin,
+            builder: (context, snapshot) {
+              final admin = snapshot.data ?? false;
+              final folderPath = f.file.name;
+              return FutureBuilder<int>(
+                future: _getFolderItemCount(folderPath, project: f.project),
+                builder: (context, countSnapshot) {
+                  final count = countSnapshot.data;
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: _cardDecoration(color: Colors.deepPurple.withOpacity(0.08)),
+                    child: ListTile(
+                      leading: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.withOpacity(0.40),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.all(6),
+                        child: const Icon(Icons.folder, color: Colors.white, size: 32),
+                      ),
+                      title: Text(
+                        f.file.name.replaceAll('/', '').replaceAll('_folder', ''),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white, letterSpacing: 0.2),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (count == null)
+                            const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          else
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.deepPurple.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              child: Text(
+                                '$count',
+                                style: const TextStyle(
+                                  color: Colors.deepPurple,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      onTap: () => _onTapItem(f.file, project: f.project), // <-- Add this line
+                    ),
+                  );
+                },
+              );
+            },
+          )),
+          ...allFiles.map((f) => Container(
+            margin: const EdgeInsets.symmetric(vertical: 10),
+            decoration: _cardDecoration(),
+            child: ListTile(
+              leading: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple.withOpacity(0.40),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.all(6),
+                  child: _isImage(f.file.name)
+                      ? const Icon(Icons.image, color: Colors.white, size: 28)
+                      : _isPdf(f.file.name)
+                      ? const Icon(Icons.picture_as_pdf, color: Colors.white, size: 28)
+                      : _isPptx(f.file.name)
+                      ? const Icon(Icons.slideshow, color: Colors.white, size: 28)
+                      : _isDocx(f.file.name)
+                      ? const Icon(Icons.description, color: Colors.white, size: 28)
+                      : _isXlsx(f.file.name)
+                      ? const Icon(Icons.table_chart, color: Colors.white, size: 28)
+                      : _isTxt(f.file.name)
+                      ? const Icon(Icons.text_snippet, color: Colors.white, size: 28)
+                      : const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
+                ),
+              ),
+              title: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Text(
+                  f.file.name,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 18, color: Colors.deepPurple),
+                ),
+              ),
+              onTap: () => _onTapItem(f.file, project: f.project),
+              onLongPress: () async {
+                if (await isAdmin) _onLongPressItem(f.file);
+              },
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              hoverColor: Colors.deepPurple.withOpacity(0.07),
+              trailing: IconButton(
+                icon: const Icon(Icons.download_rounded, color: Colors.deepPurple, size: 26),
+                tooltip: 'Download',
+                onPressed: () {
+                  _downloadFile(
+                    f.file.name,
+                    f.file.name,
+                    project: f.project,
+                  );
+                },
+              ),
+            ),
+          )),
+        ],
+      );
+    }
+    // Always show search results if searchQuery.isNotEmpty, even at root
     if (searchQuery.isNotEmpty) {
       final folders = _globalSearchResults.where((r) => _isFolder(r.file)).toList();
       final files = _globalSearchResults.where((r) => !_isFolder(r.file)).toList();
@@ -790,7 +931,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         children: [
           ...folders.map((r) => FutureBuilder<int>(
-            future: _getFolderItemCount(r.fullPath),
+            future: _getFolderItemCount(r.fullPath, project: r.project),
             builder: (context, countSnapshot) {
               final count = countSnapshot.data;
               return Container(
@@ -814,35 +955,21 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                     r.fullPath.replaceAll('_folder', ''),
                     style: const TextStyle(fontSize: 13, color: Colors.white70),
                   ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (count == null)
-                        const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      else
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.deepPurple.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          child: Text(
-                            '$count',
-                            style: const TextStyle(
-                              color: Colors.deepPurple,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ),
-                    ],
+                  trailing: count == null
+                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      : Container(
+                    decoration: BoxDecoration(
+                      color: Colors.deepPurple.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    child: Text(
+                      '$count items',
+                      style: const TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
                   ),
                   selected: _selectedItems.contains(r.file),
-                  onTap: () => _onTapItem(r.file),
+                  onTap: () => _onTapItem(r.file, project: r.project), // <-- Always use r.project
                   onLongPress: () => _onLongPressItem(r.file),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   hoverColor: Colors.deepPurple.withOpacity(0.13),
@@ -885,12 +1012,8 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                       fontWeight: FontWeight.w600, fontSize: 18, color: Colors.deepPurple),
                 ),
               ),
-              subtitle: Text(
-                r.fullPath.replaceAll('_folder', ''),
-                style: const TextStyle(fontSize: 13, color: Colors.white70),
-              ),
               selected: _selectedItems.contains(r.file),
-              onTap: () => _onTapItem(r.file),
+              onTap: () => _onTapItem(r.file, project: r.project), // <-- Always use r.project
               onLongPress: () => _onLongPressItem(r.file),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               hoverColor: Colors.deepPurple.withOpacity(0.07),
@@ -900,7 +1023,11 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                   icon: const Icon(Icons.download_rounded, color: Colors.deepPurple, size: 26),
                   tooltip: 'Download',
                   onPressed: () {
-                    _downloadFile(currentPath.isEmpty ? r.file.name : '$currentPath/${r.file.name}', r.file.name);
+                    _downloadFile(
+                      r.fullPath,
+                      r.file.name,
+                      project: r.project, // <-- Always use r.project
+                    );
                   },
                 ),
               ),
@@ -1053,7 +1180,6 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                     fontWeight: FontWeight.w600, fontSize: 18, color: Colors.deepPurple),
               ),
             ),
-            subtitle: null,
             selected: _selectedItems.contains(f),
             onTap: () => _onTapItem(f),
             onLongPress: () => _onLongPressItem(f),
@@ -1064,9 +1190,9 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               tooltip: 'Download',
               onPressed: () {
                 _downloadFile(
-                  currentPath.isEmpty ? f.name : '$currentPath/${f.name}',
                   f.name,
-                  project: _currentProject,
+                  f.name,
+                  project: _currentProject, // <-- Fix: use _currentProject instead of f
                 );
               },
             ),
@@ -1251,7 +1377,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       }
       _folderCounts.clear(); // Clear cache before refresh
       await _loadFolder(currentPath, project: _currentProject); // Ensure refresh after delete
-      await _buildSearchCache(); // <-- Add this
+      // REMOVE: await _buildSearchCache();
     } catch (e) {
       setState(() {
         error = 'Failed to delete: $e';
@@ -1316,6 +1442,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
       await _loadFolder(currentPath, project: project); // Ensure refresh after folder creation
       print('DEBUG: Created folder at ==================$folderPath');
       await logEditEvent('Created folder: $folderPath');
+      // REMOVE: await _buildSearchCache();
     }
   }
 
@@ -1475,7 +1602,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath, project: project);
-      await _buildSearchCache();
+      // REMOVE: await _buildSearchCache();
       print('DEBUG: Uploaded image at ==================$uploadPath');
       await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
@@ -1490,7 +1617,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath, project: project);
-      await _buildSearchCache();
+      // REMOVE: await _buildSearchCache();
       print('DEBUG: Uploaded PDF at ==================$uploadPath');
       await logEditEvent('Uploaded PDF: $uploadPath');
     }
@@ -1650,7 +1777,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
               fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath, project: project);
-      await _buildSearchCache();
+      // REMOVE: await _buildSearchCache();
       print('DEBUG: Uploaded image at ==================$uploadPath');
       await logEditEvent('Uploaded image: $uploadPath');
     } else if (type == 'pdf') {
@@ -1665,7 +1792,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
           .upload(uploadPath, file, fileOptions: const FileOptions(upsert: true));
       _folderCounts.clear();
       await _loadFolder(currentPath, project: project);
-      await _buildSearchCache();
+      // REMOVE: await _buildSearchCache();
       print('DEBUG: Uploaded PDF at ==================$uploadPath');
       await logEditEvent('Uploaded PDF: $uploadPath');
     }
@@ -1979,6 +2106,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
+
                       child: Column(
                         children: [
                           // _buildProjectToggle(), // REMOVE
@@ -2006,9 +2134,10 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                                           await _loadFolder(currentPath, project: _currentProject);
                                         }
                                       },
-                                      child: currentPath.isEmpty
-                                          ? _buildCombinedRootList()
-                                          : _buildList(),
+                                      // Always use _buildList(), remove check for currentPath.isEmpty
+
+
+                                      child:_buildList(),
                                     ),
                                   ),
                                 ),
@@ -2230,7 +2359,7 @@ class _past_Papers_ScreenState extends State<past_Papers_Screen> {
                 _downloadFile(
                   f.file.name,
                   f.file.name,
-                  project: f.project,
+                  project: _currentProject, // <-- Fix: use _currentProject instead of f
                 );
               },
             ),
