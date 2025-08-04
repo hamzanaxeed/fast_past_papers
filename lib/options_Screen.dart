@@ -11,6 +11,7 @@ import 'log.dart'; // Add this import
 import 'view_Logs.dart'; // Add this import
 import 'timeTable.dart';
 import 'homeScreen.dart';
+import 'authentications.dart';
 
 class OptionsScreen extends StatelessWidget {
   const OptionsScreen({Key? key}) : super(key: key);
@@ -67,7 +68,10 @@ class OptionsScreen extends StatelessWidget {
           await showFeedbackOrAdminScreen(context);
         } else if (value == 'logout') {
           await FirebaseAuth.instance.signOut();
-          Navigator.of(context).popUntil((route) => route.isFirst);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+            (route) => false,
+          );
         } else if (value == 'manage_messages') {
           showManageMessagesDialog(context); // <-- Use from message_File.dart
         } else if (value == 'editors') {

@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'main.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 
 class FolderFile {
   final String name;
@@ -117,7 +119,7 @@ class PastPaperProvider extends ChangeNotifier {
   }
 
   // Fetch root folders/files (from cache if available, otherwise fetch from Supabase)
-  Future<void> fetchRootFoldersAndFiles() async {
+  Future<void> fetchRootFoldersAndFiles({bool force = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
@@ -126,10 +128,9 @@ class PastPaperProvider extends ChangeNotifier {
       final mainBucket = 'pastpapers';
       final tempBucket = 'pastpaper1';
 
-      // If cache is empty, fetch from Supabase and update cache
       bool cacheEmpty = (_cache[mainBucket]?[''] == null) && (_cache[tempBucket]?[''] == null);
 
-      if (cacheEmpty) {
+      if (cacheEmpty || force) {
         final mainClient = Supabase.instance.client;
         final tempClient = tempSupabaseClient;
 
@@ -149,7 +150,13 @@ class PastPaperProvider extends ChangeNotifier {
       _currentBucket = '';
       _currentPath = '';
     } catch (e) {
-      _error = 'Failed to fetch files: ${e.toString()}';
+      if (e.toString().toLowerCase().contains('SocketException') ||
+          e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection')) {
+        _error = 'Network error: Please check your internet connection and try again.';
+      } else {
+        _error = 'Failed to fetch files. Please try again later.';
+      }
       _items = [];
     }
 
@@ -158,14 +165,14 @@ class PastPaperProvider extends ChangeNotifier {
   }
 
   // Fetch folder contents (from cache if available)
-  Future<void> fetchFolderContents(String bucket, String folderPath) async {
+  Future<void> fetchFolderContents(String bucket, String folderPath, {bool force = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
       final cached = _cache[bucket]?[folderPath];
-      if (cached != null) {
+      if (cached != null && !force) {
         _items = cached;
       } else {
         final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
@@ -177,7 +184,13 @@ class PastPaperProvider extends ChangeNotifier {
       _currentBucket = bucket;
       _currentPath = folderPath;
     } catch (e) {
-      _error = 'Failed to fetch files: ${e.toString()}';
+      if (e.toString().contains('SocketException') ||
+          e.toString().toLowerCase().contains('network') ||
+          e.toString().toLowerCase().contains('connection')) {
+        _error = 'Network error: Please check your internet connection and try again.';
+      } else {
+        _error = 'Failed to fetch files. Please try again later.';
+      }
     }
     _loading = false;
     notifyListeners();
@@ -200,29 +213,32 @@ void fetchFolder({
   final provider = Provider.of<PastPaperProvider>(context, listen: false);
   if (force || folderPath != provider.currentPath || bucket != provider.currentBucket) {
     if (folderPath.isEmpty) {
-      provider.fetchRootFoldersAndFiles();
+      provider.fetchRootFoldersAndFiles(force: force);
     } else {
-      provider.fetchFolderContents(bucket ?? '', folderPath);
+      provider.fetchFolderContents(bucket ?? '', folderPath, force: force);
     }
     provider.currentPath = folderPath;
     provider.currentBucket = bucket;
   }
 }
 
-// Helper to count files/folders inside a folder
+// Helper to count files/folders inside a folder (excluding .keep and .emptyFolderPlaceholder)
 Future<int> getFolderItemCount(BuildContext context, FolderFile folder) async {
   final provider = Provider.of<PastPaperProvider>(context, listen: false);
-  final cached = provider.items;
-  if (cached.isNotEmpty && folder.fullPath == provider.currentPath && folder.bucket == provider.currentBucket) {
-    return cached.length;
-  }
   final cacheMap = provider.cache[folder.bucket];
-  if (cacheMap != null && cacheMap.containsKey(folder.fullPath)) {
-    return cacheMap[folder.fullPath]!.length;
+  List<FolderFile>? cachedItems = cacheMap != null ? cacheMap[folder.fullPath] : null;
+  if (cachedItems != null) {
+    // Exclude .keep and .emptyFolderPlaceholder
+    return cachedItems
+        .where((item) => item.name != '.keep' && item.name != '.emptyFolderPlaceholder')
+        .length;
   }
+  // If not cached, fetch and filter
   final client = folder.bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
   final items = await client.storage.from(folder.bucket).list(path: folder.fullPath);
-  return items.length;
+  return items
+      .where((item) => item.name != '.keep' && item.name != '.emptyFolderPlaceholder')
+      .length;
 }
 
 // Download logic
@@ -288,4 +304,591 @@ Future<void> downloadFile(BuildContext context, FolderFile file) async {
 String buildFileUrl(String bucket, String filePath) {
   final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
   return client.storage.from(bucket).getPublicUrl(filePath);
+}
+
+// File upload logic
+Future<void> showUploadFileDialog({
+  required BuildContext context,
+  required String folderPath,
+  required String bucket,
+  required VoidCallback onUploaded,
+}) async {
+  final result = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: Colors.white,
+      title: const Text('Select File Type', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ElevatedButton.icon(
+            icon: const Icon(Icons.image, color: Colors.white),
+            label: const Text('Image'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size.fromHeight(44),
+            ),
+            onPressed: () => Navigator.pop(ctx, 'image'),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+            label: const Text('PDF'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size.fromHeight(44),
+            ),
+            onPressed: () => Navigator.pop(ctx, 'pdf'),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.insert_drive_file, color: Colors.white),
+            label: const Text('Other File'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size.fromHeight(44),
+            ),
+            onPressed: () => Navigator.pop(ctx, 'other'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (result == 'image') {
+    await _showImageSourceDialog(context, folderPath, bucket, onUploaded);
+  } else if (result == 'pdf') {
+    await _pickAndUploadPDF(context, folderPath, bucket, onUploaded);
+  } else if (result == 'other') {
+    await _pickAndUploadAny(context, folderPath, bucket, onUploaded);
+  }
+}
+
+Future<void> _showImageSourceDialog(
+  BuildContext context,
+  String folderPath,
+  String bucket,
+  VoidCallback onUploaded,
+) async {
+  final source = await showDialog<ImageSource>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: Colors.white,
+      title: const Text('Select Image Source', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ElevatedButton.icon(
+            icon: const Icon(Icons.camera_alt, color: Colors.white),
+            label: const Text('Camera'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size.fromHeight(44),
+            ),
+            onPressed: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.photo_library, color: Colors.white),
+            label: const Text('Gallery'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              minimumSize: const Size.fromHeight(44),
+            ),
+            onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (source != null) {
+    await _pickAndUploadImage(context, source, folderPath, bucket, onUploaded);
+  }
+}
+
+// Prompt user for a new file name (returns null if cancelled)
+Future<String?> promptForFileName(BuildContext context, String originalName) async {
+  final ext = originalName.contains('.') ? '.${originalName.split('.').last}' : '';
+  final controller = TextEditingController(text: originalName.replaceAll(ext, ''));
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: Colors.white,
+      title: const Text('Rename File', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+      content: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: 'File name',
+          suffixText: ext,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        autofocus: true,
+      ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(ctx, null),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.deepPurple,
+            side: const BorderSide(color: Colors.deepPurple),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final name = controller.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(ctx, '$name$ext');
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
+
+// Prompt user for a new folder name (returns null if cancelled)
+Future<String?> promptForFolderName(BuildContext context) async {
+  final controller = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      backgroundColor: Colors.white,
+      title: const Text('Create Folder', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+      content: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: 'Folder name',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        autofocus: true,
+      ),
+      actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      actions: [
+        OutlinedButton(
+          onPressed: () => Navigator.pop(ctx, null),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.deepPurple,
+            side: const BorderSide(color: Colors.deepPurple),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            final name = controller.text.trim();
+            if (name.isEmpty) return;
+            Navigator.pop(ctx, name);
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          child: const Text('Create'),
+        ),
+      ],
+    ),
+  );
+}
+
+// Create folder in Supabase storage (adds _folder suffix)
+Future<void> createFolder({
+  required BuildContext context,
+  required String folderPath,
+  required String bucket,
+  required VoidCallback onCreated,
+}) async {
+  final folderName = await promptForFolderName(context);
+  if (folderName == null || folderName.trim().isEmpty) return;
+
+  final folderObjectName = '${folderName}_folder';
+  final fullPath = folderPath.isEmpty ? folderObjectName : '$folderPath/$folderObjectName';
+
+  // Use correct client for temp bucket
+  final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+
+  try {
+    // Create a temporary empty file to represent the folder
+    final tempDir = Directory.systemTemp;
+    final tempFile = await File('${tempDir.path}/empty_folder_placeholder').create();
+    await tempFile.writeAsBytes([]);
+    await client.storage.from(bucket).upload(
+      fullPath,
+      tempFile,
+      fileOptions: const FileOptions(upsert: false, contentType: 'application/x-empty'),
+    );
+    await tempFile.delete();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Folder "$folderName" created!'), backgroundColor: Colors.green),
+    );
+    onCreated();
+    refreshCurrentFolder(context);
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to create folder: ${e.toString().replaceAll('Exception: ', '')}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+
+// Helper to refresh current folder after upload/deletion
+void refreshCurrentFolder(BuildContext context) {
+  final provider = Provider.of<PastPaperProvider>(context, listen: false);
+  if (provider.currentPath.isEmpty) {
+    provider.fetchRootFoldersAndFiles(force: true);
+  } else {
+    provider.fetchFolderContents(provider.currentBucket, provider.currentPath, force: true);
+  }
+}
+
+Future<void> _pickAndUploadImage(
+  BuildContext context,
+  ImageSource source,
+  String folderPath,
+  String bucket,
+  VoidCallback onUploaded,
+) async {
+  final picker = ImagePicker();
+  final picked = await picker.pickImage(source: source);
+  if (picked == null) return;
+
+  // Ask for new file name
+  final newName = await promptForFileName(context, picked.name);
+  if (newName == null || newName.trim().isEmpty) return;
+
+  final file = File(picked.path);
+  final storagePath = folderPath.isEmpty ? newName : '$folderPath/$newName';
+
+  // Show upload progress as a persistent SnackBar
+  final scaffold = ScaffoldMessenger.of(context);
+  final progressController = ValueNotifier<double>(0.0);
+  final uploadingSnackBar = SnackBar(
+    duration: const Duration(days: 1),
+    content: ValueListenableBuilder<double>(
+      valueListenable: progressController,
+      builder: (context, progress, _) {
+        return Row(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                progress < 1.0
+                  ? 'Uploading...'
+                  : 'Image uploaded!',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: Colors.deepPurple,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    margin: const EdgeInsets.all(16),
+  );
+  scaffold.showSnackBar(uploadingSnackBar);
+
+  try {
+    // Use correct client for temp bucket
+    final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+
+    await client.storage.from(bucket).upload(
+      storagePath,
+      file,
+      fileOptions: const FileOptions(upsert: true),
+    );
+    progressController.value = 1.0;
+    await Future.delayed(const Duration(milliseconds: 700));
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      const SnackBar(
+        content: Text('Image uploaded!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+        margin: EdgeInsets.all(16),
+      ),
+    );
+    onUploaded();
+    refreshCurrentFolder(context);
+  } catch (e) {
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      SnackBar(
+        content: Text(
+          e.toString().contains('SocketException') ||
+                  e.toString().toLowerCase().contains('network') ||
+                  e.toString().toLowerCase().contains('connection')
+              ? 'Network error: Please check your internet connection and try again.'
+              : 'Upload failed: ${e.toString().replaceAll('Exception: ', '')}',
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+Future<void> _pickAndUploadPDF(
+  BuildContext context,
+  String folderPath,
+  String bucket,
+  VoidCallback onUploaded,
+) async {
+  final result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['pdf']);
+  if (result == null || result.files.isEmpty) return;
+
+  // Ask for new file name
+  final newName = await promptForFileName(context, result.files.single.name);
+  if (newName == null || newName.trim().isEmpty) return;
+
+  final file = File(result.files.single.path!);
+  final storagePath = folderPath.isEmpty ? newName : '$folderPath/$newName';
+
+  // Show upload progress as a persistent SnackBar
+  final scaffold = ScaffoldMessenger.of(context);
+  final progressController = ValueNotifier<double>(0.0);
+  final uploadingSnackBar = SnackBar(
+    duration: const Duration(days: 1),
+    content: ValueListenableBuilder<double>(
+      valueListenable: progressController,
+      builder: (context, progress, _) {
+        return Row(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                progress < 1.0
+                  ? 'Uploading...'
+                  : 'PDF uploaded!',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: Colors.deepPurple,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    margin: const EdgeInsets.all(16),
+  );
+  scaffold.showSnackBar(uploadingSnackBar);
+
+  try {
+    // Use correct client for temp bucket
+    final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+
+    await client.storage.from(bucket).upload(
+      storagePath,
+      file,
+      fileOptions: const FileOptions(upsert: true),
+    );
+    progressController.value = 1.0;
+    await Future.delayed(const Duration(milliseconds: 700));
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      const SnackBar(
+        content: Text('PDF uploaded!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+        margin: EdgeInsets.all(16),
+      ),
+    );
+    onUploaded();
+    refreshCurrentFolder(context);
+  } catch (e) {
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      SnackBar(
+        content: Text(
+          e.toString().contains('SocketException') ||
+                  e.toString().toLowerCase().contains('network') ||
+                  e.toString().toLowerCase().contains('connection')
+              ? 'Network error: Please check your internet connection and try again.'
+              : 'Upload failed: ${e.toString().replaceAll('Exception: ', '')}',
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+// Add this function for any file type
+Future<void> _pickAndUploadAny(
+  BuildContext context,
+  String folderPath,
+  String bucket,
+  VoidCallback onUploaded,
+) async {
+  final result = await FilePicker.platform.pickFiles(type: FileType.any);
+  if (result == null || result.files.isEmpty) return;
+
+  final newName = await promptForFileName(context, result.files.single.name);
+  if (newName == null || newName.trim().isEmpty) return;
+
+  final file = File(result.files.single.path!);
+  final storagePath = folderPath.isEmpty ? newName : '$folderPath/$newName';
+
+  final scaffold = ScaffoldMessenger.of(context);
+  final progressController = ValueNotifier<double>(0.0);
+  final uploadingSnackBar = SnackBar(
+    duration: const Duration(days: 1),
+    content: ValueListenableBuilder<double>(
+      valueListenable: progressController,
+      builder: (context, progress, _) {
+        return Row(
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                progress < 1.0
+                  ? 'Uploading...'
+                  : 'File uploaded!',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        );
+      },
+    ),
+    behavior: SnackBarBehavior.floating,
+    backgroundColor: Colors.deepPurple,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    margin: const EdgeInsets.all(16),
+  );
+  scaffold.showSnackBar(uploadingSnackBar);
+
+  try {
+    // Use correct client for temp bucket
+    final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+
+    await client.storage.from(bucket).upload(
+      storagePath,
+      file,
+      fileOptions: const FileOptions(upsert: true),
+    );
+    progressController.value = 1.0;
+    await Future.delayed(const Duration(milliseconds: 700));
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      const SnackBar(
+        content: Text('File uploaded!'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+        margin: EdgeInsets.all(16),
+      ),
+    );
+    onUploaded();
+    refreshCurrentFolder(context);
+  } catch (e) {
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      SnackBar(
+        content: Text(
+          e.toString().contains('SocketException') ||
+                  e.toString().toLowerCase().contains('network') ||
+                  e.toString().toLowerCase().contains('connection')
+              ? 'Network error: Please check your internet connection and try again.'
+              : 'Upload failed: ${e.toString().replaceAll('Exception: ', '')}',
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+}
+
+// Rename file or folder in Supabase storage
+Future<bool> renameItem({
+  required BuildContext context,
+  required FolderFile item,
+  required String newName,
+}) async {
+  final bucket = item.bucket;
+  final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  // Ensure correct parent path and new full path
+  final parentPath = item.fullPath.contains('/') ? item.fullPath.substring(0, item.fullPath.lastIndexOf('/')) : '';
+  final newFullPath = parentPath.isEmpty ? newName : '$parentPath/$newName';
+
+  try {
+    if (item.isFolder) {
+      // 1. Create the new folder "file" at the correct path
+      final tempDir = Directory.systemTemp;
+      final tempFile = await File('${tempDir.path}/empty_folder_placeholder').create();
+      await tempFile.writeAsBytes([]);
+      await client.storage.from(bucket).upload(
+        newFullPath,
+        tempFile,
+        fileOptions: const FileOptions(upsert: false, contentType: 'application/x-empty'),
+      );
+      await tempFile.delete();
+
+      // 2. Copy all contents to new folder path
+      final contents = await client.storage.from(bucket).list(path: item.fullPath);
+      for (final subItem in contents) {
+        final oldSubPath = '${item.fullPath}/${subItem.name}';
+        final newSubPath = '$newFullPath/${subItem.name}';
+        final fileBytes = await client.storage.from(bucket).download(oldSubPath);
+        await client.storage.from(bucket).upload(newSubPath, File.fromRawPath(fileBytes), fileOptions: const FileOptions(upsert: true));
+      }
+
+      // 3. Delete old folder and its contents
+      for (final subItem in contents) {
+        await client.storage.from(bucket).remove(['${item.fullPath}/${subItem.name}']);
+      }
+      await client.storage.from(bucket).remove([item.fullPath]);
+    } else {
+      // File: copy to new full path, delete old
+      final fileBytes = await client.storage.from(bucket).download(item.fullPath);
+      await client.storage.from(bucket).upload(newFullPath, File.fromRawPath(fileBytes), fileOptions: const FileOptions(upsert: true));
+      await client.storage.from(bucket).remove([item.fullPath]);
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Renamed successfully!'), backgroundColor: Colors.green),
+    );
+    refreshCurrentFolder(context);
+    return true;
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Rename failed: ${e.toString()}'), backgroundColor: Colors.red),
+    );
+    return false;
+  }
 }

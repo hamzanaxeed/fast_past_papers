@@ -6,6 +6,7 @@ import 'package:open_file/open_file.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart'; // For clipboard copy
+import 'image_Viewer.dart'; // Add this import
 
 class OtherViewer extends StatefulWidget {
   final String url;
@@ -57,11 +58,24 @@ class _OtherViewerState extends State<OtherViewer> {
     return ext.endsWith('.zip') || ext.endsWith('.rar');
   }
 
+  // Add image file support
+  bool get isImageFile {
+    final ext = widget.name.toLowerCase();
+    return ext.endsWith('.jpg') ||
+        ext.endsWith('.jpeg') ||
+        ext.endsWith('.png') ||
+        ext.endsWith('.gif') ||
+        ext.endsWith('.bmp') ||
+        ext.endsWith('.webp') ||
+        ext.endsWith('.jpj');
+  }
+
   bool get isHttps => widget.url.toLowerCase().startsWith('https://');
 
   @override
   void initState() {
     super.initState();
+    // No need to load anything for images
     if (isSupportedForDocsViewer && isHttps) {
       final fileUrl = Uri.encodeComponent(widget.url);
       final viewerUrl = 'https://docs.google.com/gview?embedded=true&url=$fileUrl';
@@ -80,6 +94,7 @@ class _OtherViewerState extends State<OtherViewer> {
           },
         ))
         ..loadRequest(Uri.parse(viewerUrl));
+      // Always show WebView for supported types
       _webViewReady = true;
     } else if (isSupportedForTextPreview) {
       _loadTextPreview();
@@ -111,7 +126,12 @@ class _OtherViewerState extends State<OtherViewer> {
       }
     } catch (e) {
       setState(() {
-        _textError = 'Error loading preview.';
+        if (e.toString().contains('SocketException') ||
+            e.toString().toLowerCase().contains('network')) {
+          _textError = 'Network error: Please check your internet connection and try again.';
+        } else {
+          _textError = 'Error loading preview.';
+        }
         _textLoading = false;
       });
     }
@@ -189,11 +209,23 @@ class _OtherViewerState extends State<OtherViewer> {
       await OpenFile.open(savePath);
     } catch (e) {
       setState(() {
-        _error = e is SocketException
-            ? 'Download failed: No internet connection. Please check your network and try again.'
-            : e.toString().contains('storage')
-                ? 'Download failed: Unable to access device storage. Please check permissions.'
-                : 'Download failed: ${e.toString().replaceAll('Exception: ', '')}';
+        // Handle permission denied error
+        String userError;
+        final errStr = e.toString().toLowerCase();
+        if (errStr.contains('os error') && errStr.contains('permission denied')) {
+          userError = 'Permission denied: Please allow storage access in your device settings and try again.';
+        } else if (errStr.contains('socketexception') ||
+            errStr.contains('network') ||
+            errStr.contains('connection')) {
+          userError = 'Network error: Please check your internet connection and try again.';
+        } else if (e is SocketException) {
+          userError = 'Download failed: No internet connection. Please check your network and try again.';
+        } else if (errStr.contains('storage')) {
+          userError = 'Download failed: Unable to access device storage. Please check permissions.';
+        } else {
+          userError = 'Download failed. Please try again.';
+        }
+        _error = userError;
         _downloadProgress = 0.0;
       });
       ScaffoldMessenger.of(context).showSnackBar(
@@ -230,6 +262,11 @@ class _OtherViewerState extends State<OtherViewer> {
 
   @override
   Widget build(BuildContext context) {
+    // Image preview
+    if (isImageFile) {
+      return ImageViewer(url: widget.url, name: widget.name);
+    }
+
     // Google Docs Viewer preview
     if (isSupportedForDocsViewer && isHttps) {
       return Scaffold(
@@ -498,7 +535,7 @@ class _OtherViewerState extends State<OtherViewer> {
             ),
           ),
         ),
-      ),
-    );
+      ));
+    }
   }
-}
+
