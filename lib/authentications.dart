@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'welcome_Screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'log.dart';
+import 'login_Type.dart';
+import 'homeScreen.dart';
+import 'options_Screen.dart'; // Import OptionsScreen
+
+final loginType = LoginType();
 
 class EmailAuthScreen extends StatelessWidget {
   const EmailAuthScreen({Key? key}) : super(key: key);
@@ -207,7 +211,7 @@ class _LoginFormState extends State<_LoginForm> {
         return;
       }
 
-      await past_Papers_Screen.fetchEditorEmailsStatic();
+      await loginType.fetchEditorEmails();
 
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
@@ -239,10 +243,9 @@ class _LoginFormState extends State<_LoginForm> {
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => const past_Papers_Screen(),
+            builder: (_) => const OptionsScreen(), // <-- Change to OptionsScreen
           ),
         );
-
         Future.delayed(const Duration(milliseconds: 300), () {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -464,7 +467,7 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
 
-      await past_Papers_Screen.fetchEditorEmailsStatic();
+      await loginType.fetchEditorEmails();
 
       String? email = FirebaseAuth.instance.currentUser?.email?.toLowerCase();
       String message = "Logged in as user";
@@ -494,7 +497,7 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const past_Papers_Screen()),
+          MaterialPageRoute(builder: (_) => const OptionsScreen()), // <-- Change to OptionsScreen
         );
         Future.delayed(const Duration(milliseconds: 300), () {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -537,13 +540,13 @@ class _SocialLoginButtonsState extends State<_SocialLoginButtons> {
     try {
       logUserEvent('Guest Login Started');
       await FirebaseAuth.instance.signInAnonymously();
-      await past_Papers_Screen.fetchEditorEmailsStatic();
+      await loginType.fetchEditorEmails();
 
       logUserEvent('Guest Login');
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const past_Papers_Screen()),
+          MaterialPageRoute(builder: (_) => const OptionsScreen()), // <-- Change to OptionsScreen
         );
         Future.delayed(const Duration(milliseconds: 300), () {
           ScaffoldMessenger.of(context).showSnackBar(

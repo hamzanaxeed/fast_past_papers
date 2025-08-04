@@ -4,12 +4,14 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 import 'authentications.dart';
-import 'welcome_Screen.dart';
 import 'log.dart';
 import 'options_Screen.dart'; // <-- Add this import
 import 'message_File.dart'; // <-- Add this import
+import 'getfiles.dart';
+import 'homeScreen.dart';
 import 'dart:io' as io;
 
 late final SupabaseClient tempSupabaseClient;
@@ -26,99 +28,107 @@ void main() async {
 
   tempSupabaseClient = SupabaseClient(
     'https://yzvmemyxwgcjrjelrsjy.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6dm1lbXl4d2djanJqZWxyc2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MTczNTYsImV4cCI6MjA2OTM5MzM1Nn0.UtFhYpJUstSjZPtYdjvglmsrGriXA2iu6ElFBVLRqro',
-  );
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6dm1lbXl4d2djanJqZWxyc2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MTczNTYsImV4cCI6MjA2OTM5MzM1Nn0.UtFhYpJUstSjZPtYdjvglmsrGriXA2iu6ElFBVLRqro'
+     );
 
   final prefs = await SharedPreferences.getInstance();
   final hasSeenIntro = prefs.getBool('hasSeenIntro') ?? false;
 
+  // Wrap the whole app with ChangeNotifierProvider for PastPaperProvider
   runApp(
-    MaterialApp(
-      home: hasSeenIntro
-          ? const MyApp()
-          : const into_Screen(),
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF7FAF9),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1976D2),
-          iconTheme: IconThemeData(color: Colors.white),
-          elevation: 0,
-          titleTextStyle: TextStyle(
-            color: Colors.white,
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.1,
+    ChangeNotifierProvider(
+      create: (_) {
+        final provider = PastPaperProvider();
+        provider.prefetchAll();
+        return provider;
+      },
+      child: MaterialApp(
+        home: hasSeenIntro
+            ? const MyApp()
+            : const into_Screen(),
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blue,
+            brightness: Brightness.light,
           ),
-          toolbarTextStyle: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-            letterSpacing: 1,
+          useMaterial3: true,
+          scaffoldBackgroundColor: const Color(0xFFF7FAF9),
+          appBarTheme: const AppBarTheme(
+            backgroundColor: Color(0xFF1976D2),
+            iconTheme: IconThemeData(color: Colors.white),
+            elevation: 0,
+            titleTextStyle: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
+            ),
+            toolbarTextStyle: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 22,
+              letterSpacing: 1,
+            ),
           ),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1976D2),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1976D2),
+              foregroundColor: Colors.white,
+              textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              elevation: 4,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(18)),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+            ),
+          ),
+          outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF1976D2),
+              side: const BorderSide(color: Color(0xFF1976D2), width: 1.5),
+              textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(18)),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+            ),
+          ),
+          cardTheme: const CardThemeData(
+            color: Colors.white,
+            elevation: 10,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(22)),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            labelStyle: const TextStyle(color: Colors.black87),
+          ),
+          snackBarTheme: const SnackBarThemeData(
+            backgroundColor: Color(0xFF1976D2),
+            contentTextStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
+            behavior: SnackBarBehavior.floating,
+          ),
+          iconTheme: const IconThemeData(color: Color(0xFF1976D2)),
+          textSelectionTheme: const TextSelectionThemeData(
+            cursorColor: Color(0xFF1976D2),
+            selectionColor: Color(0xFF90CAF9),
+            selectionHandleColor: Color(0xFF1976D2),
+          ),
+          floatingActionButtonTheme: const FloatingActionButtonThemeData(
+            backgroundColor: Color(0xFF1976D2),
             foregroundColor: Colors.white,
-            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-            elevation: 4,
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(18)),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
           ),
-        ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF1976D2),
-            side: const BorderSide(color: Color(0xFF1976D2), width: 1.5),
-            textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-            shape: const RoundedRectangleBorder(
-              borderRadius: BorderRadius.all(Radius.circular(18)),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+          progressIndicatorTheme: const ProgressIndicatorThemeData(
+            color: Color(0xFF1976D2),
           ),
-        ),
-        cardTheme: const CardThemeData(
-          color: Colors.white,
-          elevation: 10,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(22)),
-          ),
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: BorderSide.none,
-          ),
-          labelStyle: const TextStyle(color: Colors.black87),
-        ),
-        snackBarTheme: const SnackBarThemeData(
-          backgroundColor: Color(0xFF1976D2),
-          contentTextStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(14))),
-          behavior: SnackBarBehavior.floating,
-        ),
-        iconTheme: const IconThemeData(color: Color(0xFF1976D2)),
-        textSelectionTheme: const TextSelectionThemeData(
-          cursorColor: Color(0xFF1976D2),
-          selectionColor: Color(0xFF90CAF9),
-          selectionHandleColor: Color(0xFF1976D2),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: Color(0xFF1976D2),
-          foregroundColor: Colors.white,
-        ),
-        progressIndicatorTheme: const ProgressIndicatorThemeData(
-          color: Color(0xFF1976D2),
         ),
       ),
     ),
@@ -370,12 +380,10 @@ class _MyAppState extends State<MyApp> {
             final user = snapshot.data;
             if (user != null) {
               logUserEvent('App Opened');
-              // Version check for non-admin after login
               _checkIfVersionIsWorkingForUser(context).then((_) {
-                // Show message after version check
-                showStartupMessage(context); // <-- Use from message_File.dart
+                showStartupMessage(context);
               });
-              return const OptionsScreen(); // <-- Always open OptionsScreen after login
+              return const OptionsScreen(); // <-- Change to OptionsScreen
             } else {
               // Only show intro button on login page
               return Stack(
@@ -413,3 +421,6 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
+
+// No code changes required for this error.
+// The error is due to network/DNS issues, not code.

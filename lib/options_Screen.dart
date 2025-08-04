@@ -1,6 +1,5 @@
 import 'package:fast_past_papers/CGPA_Calculator_Screen.dart';
 import 'package:flutter/material.dart';
-import 'welcome_Screen.dart';
 import 'SGPA_Calculator_Screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'feedback.dart';
@@ -11,6 +10,7 @@ import 'editor_Handling.dart'; // Add this import
 import 'log.dart'; // Add this import
 import 'view_Logs.dart'; // Add this import
 import 'timeTable.dart';
+import 'homeScreen.dart'; // <-- Add this import
 
 class OptionsScreen extends StatelessWidget {
   const OptionsScreen({Key? key}) : super(key: key);
@@ -203,7 +203,7 @@ class OptionsScreen extends StatelessWidget {
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const past_Papers_Screen()),
+                              MaterialPageRoute(builder: (_) => const PastPaperHomeScreen()),
                             );
                           },
                         ),
