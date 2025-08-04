@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'main.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'main.dart'; // for tempSupabaseClient
+import 'dart:io';
 
 class FolderFile {
   final String name;
@@ -23,6 +25,9 @@ class PastPaperProvider extends ChangeNotifier {
   // Cache for all folders/files by bucket and path
   final Map<String, Map<String, List<FolderFile>>> _cache = {};
 
+  // Add public getter for cache
+  Map<String, Map<String, List<FolderFile>>> get cache => _cache;
+
   List<FolderFile> get items => _items;
   bool get loading => _loading;
   String? get error => _error;
@@ -32,6 +37,10 @@ class PastPaperProvider extends ChangeNotifier {
 
   String get currentBucket => _currentBucket;
   String get currentPath => _currentPath;
+
+  // Add setters for currentPath and currentBucket
+  set currentPath(String value) => _currentPath = value;
+  set currentBucket(String? value) => _currentBucket = value ?? '';
 
   // Prefetch all folders/files on startup
   Future<void> prefetchAll() async {
@@ -179,4 +188,104 @@ class PastPaperProvider extends ChangeNotifier {
     _items = [];
     notifyListeners();
   }
+}
+
+// Fetch folder contents and update provider
+void fetchFolder({
+  required BuildContext context,
+  required String folderPath,
+  String? bucket,
+  bool force = false,
+}) {
+  final provider = Provider.of<PastPaperProvider>(context, listen: false);
+  if (force || folderPath != provider.currentPath || bucket != provider.currentBucket) {
+    if (folderPath.isEmpty) {
+      provider.fetchRootFoldersAndFiles();
+    } else {
+      provider.fetchFolderContents(bucket ?? '', folderPath);
+    }
+    provider.currentPath = folderPath;
+    provider.currentBucket = bucket;
+  }
+}
+
+// Helper to count files/folders inside a folder
+Future<int> getFolderItemCount(BuildContext context, FolderFile folder) async {
+  final provider = Provider.of<PastPaperProvider>(context, listen: false);
+  final cached = provider.items;
+  if (cached.isNotEmpty && folder.fullPath == provider.currentPath && folder.bucket == provider.currentBucket) {
+    return cached.length;
+  }
+  final cacheMap = provider.cache[folder.bucket];
+  if (cacheMap != null && cacheMap.containsKey(folder.fullPath)) {
+    return cacheMap[folder.fullPath]!.length;
+  }
+  final client = folder.bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  final items = await client.storage.from(folder.bucket).list(path: folder.fullPath);
+  return items.length;
+}
+
+// Download logic
+Future<void> downloadFile(BuildContext context, FolderFile file) async {
+  final client = file.bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  final url = client.storage.from(file.bucket).getPublicUrl(file.fullPath);
+  final filename = file.name;
+  final savePath = '/storage/emulated/0/Download/$filename';
+
+  showModalBottomSheet(
+    context: context,
+    isDismissible: false,
+    builder: (context) {
+      double progress = 0.0;
+      return StatefulBuilder(
+        builder: (context, setState) {
+          Future.microtask(() async {
+            try {
+              final response = await client.storage.from(file.bucket).download(file.fullPath);
+              final fileOut = File(savePath);
+              await fileOut.writeAsBytes(response);
+              setState(() {
+                progress = 1.0;
+              });
+            } catch (e) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Download failed: $e'), backgroundColor: Colors.red),
+              );
+            }
+          });
+
+          return Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Downloading...', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 16),
+                LinearProgressIndicator(value: progress),
+                const SizedBox(height: 16),
+                Text('${(progress * 100).toStringAsFixed(0)}%'),
+                const SizedBox(height: 16),
+                Text('Saving to: $savePath', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                if (progress == 1.0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Done'),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+// Helper to build file URL using correct SupabaseClient and bucket
+String buildFileUrl(String bucket, String filePath) {
+  final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  return client.storage.from(bucket).getPublicUrl(filePath);
 }

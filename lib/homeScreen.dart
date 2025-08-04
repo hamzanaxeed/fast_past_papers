@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'getfiles.dart';
 import 'other_Viewers.dart';
-import 'main.dart'; // Import for SupabaseClient
+import 'main.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
 
 class PastPaperHomeScreen extends StatelessWidget {
   const PastPaperHomeScreen({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return FolderScreen(folderPath: '', title: 'Past Papers');
+    return const FolderScreen(folderPath: '', title: 'Past Papers');
   }
 }
 
-// Convert FolderScreen to StatefulWidget to fetch files in initState
 class FolderScreen extends StatefulWidget {
   final String folderPath;
   final String title;
@@ -25,16 +25,19 @@ class FolderScreen extends StatefulWidget {
   State<FolderScreen> createState() => _FolderScreenState();
 }
 
-class _FolderScreenState extends State<FolderScreen> {
+class _FolderScreenState extends State<FolderScreen> with AutomaticKeepAliveClientMixin {
   String? _lastLoadedPath;
   String? _lastLoadedBucket;
   PastPaperProvider? _provider;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchFolder(force: true);
+      fetchFolderUI(context, widget.folderPath, widget.bucket, force: true);
     });
   }
 
@@ -49,94 +52,266 @@ class _FolderScreenState extends State<FolderScreen> {
     super.didUpdateWidget(oldWidget);
     if (widget.folderPath != oldWidget.folderPath || widget.bucket != oldWidget.bucket) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _fetchFolder(force: true);
+        fetchFolderUI(context, widget.folderPath, widget.bucket, force: true);
       });
     }
   }
 
-  void _fetchFolder({bool force = false}) {
-    final provider = _provider ?? Provider.of<PastPaperProvider>(context, listen: false);
-    if (force || widget.folderPath != _lastLoadedPath || widget.bucket != _lastLoadedBucket) {
-      if (widget.folderPath.isEmpty) {
-        provider.fetchRootFoldersAndFiles();
-      } else {
-        provider.fetchFolderContents(widget.bucket ?? '', widget.folderPath);
-      }
-      _lastLoadedPath = widget.folderPath;
-      _lastLoadedBucket = widget.bucket;
-    }
+  void fetchFolderUI(BuildContext context, String folderPath, String? bucket, {bool force = false}) {
+    fetchFolder(
+      context: context,
+      folderPath: folderPath,
+      bucket: bucket,
+      force: force,
+    );
+    _lastLoadedPath = folderPath;
+    _lastLoadedBucket = bucket;
   }
+
+  void _fetchParentFolder() {
+    String parentPath;
+    if (widget.folderPath.isEmpty) {
+      parentPath = '';
+    } else {
+      final parts = widget.folderPath.split('/');
+      if (parts.isNotEmpty) parts.removeLast();
+      parentPath = parts.isEmpty ? '' : parts.join('/');
+    }
+    fetchFolderUI(context, parentPath, widget.bucket, force: true);
+  }
+
+  BoxDecoration _cardDecoration({Color? color}) => BoxDecoration(
+    color: color ?? Colors.white,
+    borderRadius: BorderRadius.circular(18),
+    boxShadow: [
+      BoxShadow(
+        color: Colors.deepPurple.withOpacity(0.10),
+        blurRadius: 14,
+        offset: const Offset(0, 4),
+      ),
+    ],
+    border: Border.all(color: Colors.deepPurple.withOpacity(0.08), width: 1),
+  );
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PastPaperProvider>(
-      builder: (context, provider, _) {
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(widget.title),
-            backgroundColor: Colors.deepPurple,
-            foregroundColor: Colors.white,
-            elevation: 4,
+    super.build(context);
+    // Only build the title and contents, avoid rebuilding the whole UI or using Stack
+    return Scaffold(
+      extendBodyBehindAppBar: false,
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        title: Text(
+          widget.title,
+          style: const TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.1,
+            color: Colors.white,
+            shadows: [
+              Shadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(1, 2),
+              ),
+            ],
           ),
-          body: provider.loading
-              ? const Center(child: CircularProgressIndicator())
-              : provider.error != null
-                  ? Center(child: Text(provider.error!, style: const TextStyle(color: Colors.red)))
-                  : provider.items.isEmpty
-                      ? const Center(child: Text('No folders/files found.'))
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-                          itemCount: provider.items.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
-                          itemBuilder: (context, idx) {
-                            final item = provider.items[idx];
-                            return Card(
-                              elevation: 6,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                              child: ListTile(
-                                leading: Icon(
-                                  item.isFolder ? Icons.folder : Icons.insert_drive_file,
-                                  color: item.isFolder ? Colors.amber : Colors.blue,
-                                  size: 32,
-                                ),
-                                title: Text(item.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                                onTap: () {
-                                  if (item.isFolder) {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => FolderScreen(
-                                          folderPath: item.fullPath,
-                                          title: item.name,
-                                          bucket: item.bucket,
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        elevation: 4,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        child: Consumer<PastPaperProvider>(
+          builder: (context, provider, _) {
+            if (provider.loading) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (provider.error != null) {
+              return Center(
+                child: Text(
+                  provider.error!,
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                ),
+              );
+            }
+            if (provider.items.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No folders/files found.',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+              );
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+              itemCount: provider.items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, idx) {
+                final item = provider.items[idx];
+                if (item.isFolder) {
+                  return FutureBuilder<int>(
+                    future: getFolderItemCount(context, item),
+                    builder: (context, snapshot) {
+                      final count = snapshot.hasData ? snapshot.data! : null;
+                      return Container(
+                        decoration: _cardDecoration(color: Colors.deepPurple.withOpacity(0.08)),
+                        child: ListTile(
+                          leading: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.deepPurple.withOpacity(0.40),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.all(6),
+                            child: const Icon(Icons.folder, color: Colors.white, size: 32),
+                          ),
+                          title: Text(
+                            item.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                              color: Colors.white,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          trailing: count != null
+                              ? AnimatedContainer(
+                                  duration: const Duration(milliseconds: 250),
+                                  curve: Curves.easeOut,
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [Colors.blue.shade200, Colors.blue.shade400],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.blue.withOpacity(0.18),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                    //  const Icon(Icons.folder_open, color: Colors.white, size: 18),
+                                     // const SizedBox(width: 2),
+                                      Text(
+                                        '$count',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          letterSpacing: 0.5,
                                         ),
                                       ),
-                                    ).then((_) {
-                                      // When returning from subfolder, reload current folder
-                                      _fetchFolder(force: true);
-                                    });
-                                  } else {
-                                    final fileUrl = buildFileUrl(item.bucket, item.fullPath);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => OtherViewer(url: fileUrl, name: item.name),
-                                      ),
-                                    );
-                                  }
+                                    ],
+                                  ),
+                                )
+                              : const SizedBox(
+                                  width: 29,
+                                  height: 28,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
+                                ),
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              PageRouteBuilder(
+                                pageBuilder: (_, __, ___) => FolderScreen(
+                                  folderPath: item.fullPath,
+                                  title: item.name,
+                                  bucket: item.bucket,
+                                ),
+                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  );
                                 },
+                                transitionDuration: const Duration(milliseconds: 250),
                               ),
-                            );
+                            ).then((_) {
+                              _fetchParentFolder();
+                            });
                           },
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          hoverColor: Colors.deepPurple.withOpacity(0.13),
                         ),
-        );
-      },
+                      );
+                    },
+                  );
+                } else {
+                  return Container(
+                    decoration: _cardDecoration(),
+                    child: ListTile(
+                      leading: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.deepPurple.withOpacity(0.40),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.all(6),
+                        child: const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
+                      ),
+                      title: Text(
+                        item.name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 18,
+                          color: Colors.deepPurple,
+                        ),
+                      ),
+                      trailing: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(24),
+                          onTap: () => downloadFile(context, item),
+                          child: Tooltip(
+                            message: 'Download',
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              child: const Icon(
+                                Icons.download_for_offline_rounded,
+                                color: Colors.green,
+                                size: 28,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      onTap: () {
+                        final fileUrl = buildFileUrl(item.bucket, item.fullPath);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OtherViewer(url: fileUrl, name: item.name),
+                          ),
+                        );
+                      },
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      hoverColor: Colors.deepPurple.withOpacity(0.07),
+                    ),
+                  );
+                }
+              },
+            );
+          },
+        ),
+      ),
     );
   }
-}
-
-// Helper to build file URL using correct SupabaseClient and bucket
-String buildFileUrl(String bucket, String filePath) {
-  final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
-  return client.storage.from(bucket).getPublicUrl(filePath);
 }
