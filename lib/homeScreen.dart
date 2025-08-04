@@ -304,49 +304,212 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
             ),
             body: Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search files or folders...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _isSearching
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: _clearSearch,
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                // Gradient background for search bar area
+                Container(
+                  width: double.infinity,
+                  color: Colors.deepPurple,
+
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search files or folders...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _isSearching
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: _clearSearch,
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
                       ),
-                      filled: true,
-                      fillColor: Colors.white,
+                      onChanged: _performSearch,
                     ),
-                    onChanged: _performSearch,
                   ),
                 ),
                 Expanded(
                   child: _isSearching
-                      ? _searchResults.isEmpty
-                          ? const Center(child: Text('No results found.'))
-                          : ListView.separated(
-                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-                              itemCount: _searchResults.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 12),
-                              itemBuilder: (context, idx) {
-                                final item = _searchResults[idx];
-                                return ListTile(
-                                  leading: Icon(
-                                    item.isFolder ? Icons.folder : Icons.insert_drive_file,
-                                    color: item.isFolder ? Colors.deepPurple : Colors.blue,
-                                  ),
-                                  title: Text(item.name),
-                                  subtitle: Text(item.fullPath),
-                                  onTap: () => _navigateToSearchedItem(item),
+                      ? Container(
+                          decoration: const BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Color(0xFF7F7FD5), Color(0xFF86A8E7), Color(0xFF91EAE4)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: Consumer<PastPaperProvider>(
+                            builder: (context, provider, _) {
+                              if (_searchResults.isEmpty) {
+                                return const Center(
+                                  child: Text('No results found.', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
                                 );
-                              },
-                            )
+                              }
+                              return ListView.separated(
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+                                itemCount: _searchResults.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                itemBuilder: (context, idx) {
+                                  final item = _searchResults[idx];
+                                  final selected = false;
+                                  // Use the same tile UI as normal navigation
+                                  if (item.isFolder) {
+                                    return FutureBuilder<int>(
+                                      future: getFolderItemCount(context, item),
+                                      builder: (context, snapshot) {
+                                        final count = snapshot.hasData ? snapshot.data! : null;
+                                        return Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.deepPurple.withOpacity(0.08),
+                                            borderRadius: BorderRadius.circular(18),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.deepPurple.withOpacity(0.10),
+                                                blurRadius: 14,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                            border: Border.all(
+                                              color: Colors.deepPurple.withOpacity(0.08),
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          child: ListTile(
+                                            leading: Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.deepPurple.withOpacity(0.40),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              padding: const EdgeInsets.all(6),
+                                              child: const Icon(Icons.folder, color: Colors.white, size: 32),
+                                            ),
+                                            title: Text(
+                                              item.name,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 20,
+                                                color: Colors.white,
+                                                letterSpacing: 0.2,
+                                              ),
+                                            ),
+                                            trailing: (count != null
+                                                ? AnimatedContainer(
+                                                    duration: const Duration(milliseconds: 250),
+                                                    curve: Curves.easeOut,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                    decoration: BoxDecoration(
+                                                      gradient: LinearGradient(
+                                                        colors: [Colors.blue.shade200, Colors.blue.shade400],
+                                                        begin: Alignment.topLeft,
+                                                        end: Alignment.bottomRight,
+                                                      ),
+                                                      borderRadius: BorderRadius.circular(16),
+                                                      boxShadow: [
+                                                        BoxShadow(
+                                                          color: Colors.blue.withOpacity(0.18),
+                                                          blurRadius: 8,
+                                                          offset: const Offset(0, 2),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Text(
+                                                          '$count',
+                                                          style: const TextStyle(
+                                                            color: Colors.white,
+                                                            fontWeight: FontWeight.bold,
+                                                            fontSize: 16,
+                                                            letterSpacing: 0.5,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  )
+                                                : const SizedBox(
+                                                    width: 29,
+                                                    height: 28,
+                                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.blueAccent),
+                                                  )),
+                                            onTap: () => _navigateToSearchedItem(item),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                            hoverColor: Colors.deepPurple.withOpacity(0.13),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  } else {
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(18),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.deepPurple.withOpacity(0.10),
+                                            blurRadius: 14,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                        border: Border.all(
+                                          color: Colors.deepPurple.withOpacity(0.08),
+                                          width: 1.5,
+                                        ),
+                                      ),
+                                      child: ListTile(
+                                        leading: Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.deepPurple.withOpacity(0.40),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          padding: const EdgeInsets.all(6),
+                                          child: const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
+                                        ),
+                                        title: Text(
+                                          item.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 18,
+                                            color: Colors.deepPurple,
+                                          ),
+                                        ),
+                                        trailing: Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(24),
+                                            onTap: () => downloadFile(context, item),
+                                            child: Tooltip(
+                                              message: 'Download',
+                                              child: Container(
+                                                padding: const EdgeInsets.all(8),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.withOpacity(0.15),
+                                                  borderRadius: BorderRadius.circular(24),
+                                                ),
+                                                child: const Icon(
+                                                  Icons.download_for_offline_rounded,
+                                                  color: Colors.green,
+                                                  size: 28,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        onTap: () => _navigateToSearchedItem(item),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                        hoverColor: Colors.deepPurple.withOpacity(0.07),
+                                      ),
+                                    );
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                        )
                       : ValueListenableBuilder<String>(
                           valueListenable: _folderPath,
                           builder: (context, folderPath, _) {
