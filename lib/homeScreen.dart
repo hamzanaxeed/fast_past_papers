@@ -24,9 +24,9 @@ class PastPaperHomeScreen extends StatefulWidget {
 
 class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
   final ValueNotifier<String> _folderPath = ValueNotifier<String>('');
-  final ValueNotifier<String?> _bucket = ValueNotifier<String?>(null);
+  final ValueNotifier<String?> _bucket = ValueNotifier<String?>('pastpapers'); // Default to 'pastpapers'
   final ValueNotifier<String> _title = ValueNotifier<String>('Past Papers');
-  final List<_FolderNavState> _navStack = [ _FolderNavState('', 'Past Papers', null) ];
+  final List<_FolderNavState> _navStack = [ _FolderNavState('', 'Past Papers', 'pastpapers') ];
 
   final TextEditingController _searchController = TextEditingController();
   List<FolderFile> _searchResults = [];
@@ -127,10 +127,10 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
   }
 
   void _navigateToFolder(String folderPath, String title, String? bucket) {
-    _navStack.add(_FolderNavState(folderPath, title, bucket));
+    _navStack.add(_FolderNavState(folderPath, title, bucket ?? 'pastpapers'));
     _folderPath.value = folderPath;
     _title.value = title;
-    _bucket.value = bucket;
+    _bucket.value = bucket ?? 'pastpapers';
   }
 
   Future<bool> _onWillPop() async {
@@ -148,11 +148,14 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
   void _performSearch(String query) {
     final provider = Provider.of<PastPaperProvider>(context, listen: false);
     final List<FolderFile> allItems = [];
+    // Search all buckets and all folders
     for (final bucket in provider.cache.values) {
       for (final folderItems in bucket.values) {
         allItems.addAll(folderItems);
       }
     }
+    // Also add root "folders" for both projects if searching from root
+    allItems.addAll(provider.getFolderItems('', null) ?? []);
     setState(() {
       _searchResults = allItems
           .where((item) => item.name.toLowerCase().contains(query.toLowerCase()))
@@ -587,7 +590,7 @@ class _FolderScreenState extends State<FolderScreen> with AutomaticKeepAliveClie
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      fetchFolderUI(context, widget.folderPath, widget.bucket, force: true);
+      fetchFolderUI(context, widget.folderPath, widget.bucket ?? 'pastpapers', force: true);
       _checkAdmin();
     });
   }
@@ -616,7 +619,7 @@ class _FolderScreenState extends State<FolderScreen> with AutomaticKeepAliveClie
     super.didUpdateWidget(oldWidget);
     if (widget.folderPath != oldWidget.folderPath || widget.bucket != oldWidget.bucket) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        fetchFolderUI(context, widget.folderPath, widget.bucket, force: true);
+        fetchFolderUI(context, widget.folderPath, widget.bucket ?? 'pastpapers', force: true);
       });
     }
   }
@@ -625,11 +628,11 @@ class _FolderScreenState extends State<FolderScreen> with AutomaticKeepAliveClie
     fetchFolder(
       context: context,
       folderPath: folderPath,
-      bucket: bucket,
+      bucket: bucket ?? 'pastpapers',
       force: force,
     );
     _lastLoadedPath = folderPath;
-    _lastLoadedBucket = bucket;
+    _lastLoadedBucket = bucket ?? 'pastpapers';
   }
 
   void _fetchParentFolder() {
@@ -930,7 +933,9 @@ class _FolderScreenState extends State<FolderScreen> with AutomaticKeepAliveClie
                 ),
               );
             }
-            if (provider.items.isEmpty) {
+            // Use getFolderItems for navigation (supports both projects at root)
+            final items = provider.getFolderItems(widget.folderPath, widget.bucket) ?? [];
+            if (items.isEmpty) {
               return const Center(
                 child: Text(
                   'No folders/files found.',
@@ -942,10 +947,10 @@ class _FolderScreenState extends State<FolderScreen> with AutomaticKeepAliveClie
               color: Colors.transparent,
               child: ListView.separated(
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-                itemCount: provider.items.length,
+                itemCount: items.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 12),
                 itemBuilder: (context, idx) {
-                  final item = provider.items[idx];
+                  final item = items[idx];
                   final selected = _selectedIndexes.contains(idx);
                   if (item.isFolder) {
                     return FutureBuilder<int>(

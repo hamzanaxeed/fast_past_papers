@@ -57,37 +57,42 @@ class PastPaperProvider extends ChangeNotifier {
       ];
 
       for (final bucket in buckets) {
+        debugPrint('[DEBUG] Prefetching bucket: ${bucket['name']}');
         await _prefetchBucket(bucket['client'] as SupabaseClient, bucket['name'] as String);
       }
+      debugPrint('[DEBUG] Prefetch complete. Cache keys: ${_cache.keys}');
+      for (final bucket in _cache.entries) {
+        debugPrint('[DEBUG] Bucket "${bucket.key}" has folders: ${bucket.value.keys}');
+      }
+
+      // After prefetch, fetch and set root items for navigation (ensures UI updates)
+      await fetchRootFoldersAndFiles(force: true);
     } catch (e, stack) {
       debugPrint('[ERROR] Prefetch exception: $e');
       debugPrint('[ERROR] Stack trace: $stack');
-      _error = 'Failed to prefetch files: ${e.toString()}';
+      _error = 'Failed to fetch files/folders. Please check your internet connection and try again.';
+      _items = [];
+      _loading = false;
+      notifyListeners();
     }
-
-    _loading = false;
-    notifyListeners();
   }
 
   Future<void> _prefetchBucket(SupabaseClient client, String bucketName) async {
-    // Fetch root
-    final rootItems = await _fetchFolder(client, bucketName, '');
-    _cache[bucketName] = {'': rootItems};
+    // Recursively prefetch all folders/files
+    _cache[bucketName] = {};
+    await _recursivePrefetch(client, bucketName, '');
+    debugPrint('[DEBUG] Finished prefetch for bucket "$bucketName". Folder count: ${_cache[bucketName]?.length}');
+    notifyListeners();
+  }
 
-    // Fetch depth 1 folders
-    for (final item in rootItems.where((f) => f.isFolder)) {
-      final folderPath = item.fullPath;
-      final depth1Items = await _fetchFolder(client, bucketName, folderPath);
-      _cache[bucketName]![folderPath] = depth1Items;
-
-      // Optionally, fetch deeper folders in background
-      for (final subItem in depth1Items.where((f) => f.isFolder)) {
-        final subFolderPath = subItem.fullPath;
-        _fetchFolder(client, bucketName, subFolderPath).then((deeperItems) {
-          _cache[bucketName]![subFolderPath] = deeperItems;
-          notifyListeners();
-        });
-      }
+  // Recursively prefetch all folders/files in a bucket
+  Future<void> _recursivePrefetch(SupabaseClient client, String bucket, String folderPath) async {
+    debugPrint('[DEBUG] Fetching folder: bucket="$bucket", path="$folderPath"');
+    final items = await _fetchFolder(client, bucket, folderPath);
+    debugPrint('[DEBUG] Folder "$folderPath" in bucket "$bucket" has ${items.length} items.');
+    _cache[bucket]![folderPath] = items;
+    for (final item in items.where((f) => f.isFolder)) {
+      await _recursivePrefetch(client, bucket, item.fullPath);
     }
   }
 
@@ -118,45 +123,73 @@ class PastPaperProvider extends ChangeNotifier {
     return items;
   }
 
-  // Fetch root folders/files (from cache if available, otherwise fetch from Supabase)
-  Future<void> fetchRootFoldersAndFiles({bool force = false}) async {
+  // Add this method to allow UI to get items for any folder/bucket from cache or _items
+  List<FolderFile>? getFolderItems(String folderPath, String? bucket) {
+    // If at root and bucket is null or empty, return both projects as folders
+    if ((bucket == null || bucket.isEmpty) && folderPath.isEmpty) {
+      return [
+        FolderFile(
+          name: 'Main Project',
+          isFolder: true,
+          bucket: 'pastpapers',
+          fullPath: '',
+        ),
+        FolderFile(
+          name: 'Temp Project',
+          isFolder: true,
+          bucket: 'pastpaper1',
+          fullPath: '',
+        ),
+      ];
+    }
+    // Otherwise, get from cache
+    if (bucket == null || bucket.isEmpty) return [];
+    return _cache[bucket]?[folderPath];
+  }
+
+  // Fetch root folders/files for a specific bucket (default: null = show both buckets as folders)
+  Future<void> fetchRootFoldersAndFiles({String? bucket, bool force = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final mainBucket = 'pastpapers';
-      final tempBucket = 'pastpaper1';
-
-      bool cacheEmpty = (_cache[mainBucket]?[''] == null) && (_cache[tempBucket]?[''] == null);
-
-      if (cacheEmpty || force) {
-        final mainClient = Supabase.instance.client;
-        final tempClient = tempSupabaseClient;
-
-        final mainRoot = await _fetchFolder(mainClient, mainBucket, '');
-        final tempRoot = await _fetchFolder(tempClient, tempBucket, '');
-
-        _cache[mainBucket] = {'': mainRoot};
-        _cache[tempBucket] = {'': tempRoot};
-
-        _items = [...mainRoot, ...tempRoot];
+      if (bucket == null || bucket.isEmpty) {
+        // Show both buckets as "folders" at the root
+        _items = [
+          FolderFile(
+            name: 'Main Project',
+            isFolder: true,
+            bucket: 'pastpapers',
+            fullPath: '',
+          ),
+          FolderFile(
+            name: 'Temp Project',
+            isFolder: true,
+            bucket: 'pastpaper1',
+            fullPath: '',
+          ),
+        ];
+        _currentBucket = '';
+        _currentPath = '';
       } else {
-        final mainRoot = _cache[mainBucket]?[''] ?? [];
-        final tempRoot = _cache[tempBucket]?[''] ?? [];
-        _items = [...mainRoot, ...tempRoot];
-      }
+        final mainBucket = bucket;
+        final client = mainBucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+        bool cacheEmpty = (_cache[mainBucket]?[''] == null);
 
-      _currentBucket = '';
-      _currentPath = '';
+        if (cacheEmpty || force) {
+          final rootItems = await _fetchFolder(client, mainBucket, '');
+          _cache[mainBucket] = {'': rootItems};
+          _items = rootItems;
+        } else {
+          _items = _cache[mainBucket]?[''] ?? [];
+        }
+
+        _currentBucket = mainBucket;
+        _currentPath = '';
+      }
     } catch (e) {
-      if (e.toString().toLowerCase().contains('SocketException') ||
-          e.toString().toLowerCase().contains('network') ||
-          e.toString().toLowerCase().contains('connection')) {
-        _error = 'Network error: Please check your internet connection and try again.';
-      } else {
-        _error = 'Failed to fetch files. Please try again later.';
-      }
+      _error = 'Failed to fetch files/folders. Please check your internet connection and try again.';
       _items = [];
     }
 
@@ -165,32 +198,28 @@ class PastPaperProvider extends ChangeNotifier {
   }
 
   // Fetch folder contents (from cache if available)
-  Future<void> fetchFolderContents(String bucket, String folderPath, {bool force = false}) async {
+  Future<void> fetchFolderContents(String? bucket, String folderPath, {bool force = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final cached = _cache[bucket]?[folderPath];
+      final usedBucket = (bucket == null || bucket.isEmpty) ? 'pastpapers' : bucket;
+      final cached = _cache[usedBucket]?[folderPath];
       if (cached != null && !force) {
         _items = cached;
       } else {
-        final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
-        final items = await _fetchFolder(client, bucket, folderPath);
+        final client = usedBucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+        final items = await _fetchFolder(client, usedBucket, folderPath);
         _items = items;
-        _cache[bucket] ??= {};
-        _cache[bucket]![folderPath] = items;
+        _cache[usedBucket] ??= {};
+        _cache[usedBucket]![folderPath] = items;
       }
-      _currentBucket = bucket;
+      _currentBucket = usedBucket;
       _currentPath = folderPath;
     } catch (e) {
-      if (e.toString().contains('SocketException') ||
-          e.toString().toLowerCase().contains('network') ||
-          e.toString().toLowerCase().contains('connection')) {
-        _error = 'Network error: Please check your internet connection and try again.';
-      } else {
-        _error = 'Failed to fetch files. Please try again later.';
-      }
+      _error = 'Failed to fetch files/folders. Please check your internet connection and try again.';
+      _items = [];
     }
     _loading = false;
     notifyListeners();
@@ -211,14 +240,19 @@ void fetchFolder({
   bool force = false,
 }) {
   final provider = Provider.of<PastPaperProvider>(context, listen: false);
-  if (force || folderPath != provider.currentPath || bucket != provider.currentBucket) {
-    if (folderPath.isEmpty) {
-      provider.fetchRootFoldersAndFiles(force: force);
-    } else {
-      provider.fetchFolderContents(bucket ?? '', folderPath, force: force);
-    }
+  // If at root and bucket is null/empty, show both projects as folders
+  if (folderPath.isEmpty && (bucket == null || bucket.isEmpty)) {
+    provider.fetchRootFoldersAndFiles(bucket: '', force: force);
+    provider.currentPath = '';
+    provider.currentBucket = '';
+  } else if (folderPath.isEmpty) {
+    provider.fetchRootFoldersAndFiles(bucket: bucket, force: force);
+    provider.currentPath = '';
+    provider.currentBucket = bucket ?? '';
+  } else if (force || folderPath != provider.currentPath || (bucket ?? '') != provider.currentBucket) {
+    provider.fetchFolderContents(bucket, folderPath, force: force);
     provider.currentPath = folderPath;
-    provider.currentBucket = bucket;
+    provider.currentBucket = bucket ?? '';
   }
 }
 

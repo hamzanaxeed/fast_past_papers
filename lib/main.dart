@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart' as fb_auth;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+import 'getfiles.dart';
 
 import 'authentications.dart';
 import 'log.dart';
@@ -25,11 +26,11 @@ void main() async {
   );
   tempSupabaseClient = SupabaseClient(
     'https://yzvmemyxwgcjrjelrsjy.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6dm1lbXl4d2djanJqZWxyc2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM4MTczNTYsImV4cCI6MjA2OTM5MzM1Nn0.UtFhYpJUstSjZPtYdjvglmsrGriXA2iu6ElFBVLRqro'
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl6dm1lbXl4d2djanJqZWxyc2p5Iiwicm9zZSI6ImFub24iLCJpYXQiOjE3NTM4MTczNTYsImV4cCI6MjA2OTM5MzM1Nn0.UtFhYpJUstSjZPtYdjvglmsrGriXA2iu6ElFBVLRqro'
   );
 
+  // Define the provider before using it
   final pastPaperProvider = PastPaperProvider();
-  await pastPaperProvider.prefetchAll();
 
   final prefs = await SharedPreferences.getInstance();
   final hasSeenIntro = prefs.getBool('hasSeenIntro') ?? false;
@@ -163,7 +164,9 @@ class _MyAppState extends State<MyApp> {
     _storeCurrentVersion();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _checkVersionAndShowAlert(context);
-      // Remove version check here, move after login
+      // Start prefetch in background after UI loads
+      final provider = Provider.of<PastPaperProvider>(context, listen: false);
+      provider.prefetchAll();
     });
   }
 
