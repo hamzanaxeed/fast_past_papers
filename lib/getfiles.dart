@@ -143,8 +143,8 @@ class PastPaperProvider extends ChangeNotifier {
       ];
     }
     // Otherwise, get from cache
-    if (bucket == null || bucket.isEmpty) return [];
-    return _cache[bucket]?[folderPath];
+    final usedBucket = (bucket == null || bucket.isEmpty) ? 'pastpapers' : bucket;
+    return _cache[usedBucket]?[folderPath];
   }
 
   // Fetch root folders/files for a specific bucket (default: null = show both buckets as folders)
@@ -240,19 +240,16 @@ void fetchFolder({
   bool force = false,
 }) {
   final provider = Provider.of<PastPaperProvider>(context, listen: false);
-  // If at root and bucket is null/empty, show both projects as folders
-  if (folderPath.isEmpty && (bucket == null || bucket.isEmpty)) {
-    provider.fetchRootFoldersAndFiles(bucket: '', force: force);
+  final usedBucket = (bucket == null || bucket.isEmpty) ? 'pastpapers' : bucket;
+  // Always fetch root if folderPath is empty, to ensure UI updates
+  if (folderPath.isEmpty) {
+    provider.fetchRootFoldersAndFiles(bucket: usedBucket, force: force);
     provider.currentPath = '';
-    provider.currentBucket = '';
-  } else if (folderPath.isEmpty) {
-    provider.fetchRootFoldersAndFiles(bucket: bucket, force: force);
-    provider.currentPath = '';
-    provider.currentBucket = bucket ?? '';
-  } else if (force || folderPath != provider.currentPath || (bucket ?? '') != provider.currentBucket) {
-    provider.fetchFolderContents(bucket, folderPath, force: force);
+    provider.currentBucket = usedBucket;
+  } else if (force || folderPath != provider.currentPath || usedBucket != provider.currentBucket) {
+    provider.fetchFolderContents(usedBucket, folderPath, force: force);
     provider.currentPath = folderPath;
-    provider.currentBucket = bucket ?? '';
+    provider.currentBucket = usedBucket;
   }
 }
 
