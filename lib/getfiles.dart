@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'dart:async';
 
 class FolderFile {
   final String name;
@@ -44,20 +45,21 @@ class PastPaperProvider extends ChangeNotifier {
   set currentPath(String value) => _currentPath = value;
   set currentBucket(String? value) => _currentBucket = value ?? '';
 
-  // Prefetch all folders/files on startup
+  // Prefetch all folders/files on startup (recursively for the entire project)
   Future<void> prefetchAll() async {
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
+      // Only use main project bucket
       final buckets = [
         {'client': Supabase.instance.client, 'name': 'pastpapers'},
-        {'client': tempSupabaseClient, 'name': 'pastpaper1'},
       ];
 
+      // Always clear cache before prefetch to avoid stale data
       for (final bucket in buckets) {
-        debugPrint('[DEBUG] Prefetching bucket: ${bucket['name']}');
+        _cache[bucket['name'] as String] = {};
         await _prefetchBucket(bucket['client'] as SupabaseClient, bucket['name'] as String);
       }
       debugPrint('[DEBUG] Prefetch complete. Cache keys: ${_cache.keys}');
@@ -85,7 +87,7 @@ class PastPaperProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Recursively prefetch all folders/files in a bucket
+  // Recursively prefetch all folders/files in a bucket (covers the entire project tree)
   Future<void> _recursivePrefetch(SupabaseClient client, String bucket, String folderPath) async {
     debugPrint('[DEBUG] Fetching folder: bucket="$bucket", path="$folderPath"');
     final items = await _fetchFolder(client, bucket, folderPath);
@@ -123,71 +125,33 @@ class PastPaperProvider extends ChangeNotifier {
     return items;
   }
 
-  // Add this method to allow UI to get items for any folder/bucket from cache or _items
+  // Only show real folders/files at root
   List<FolderFile>? getFolderItems(String folderPath, String? bucket) {
-    // If at root and bucket is null or empty, return both projects as folders
-    if ((bucket == null || bucket.isEmpty) && folderPath.isEmpty) {
-      return [
-        FolderFile(
-          name: 'Main Project',
-          isFolder: true,
-          bucket: 'pastpapers',
-          fullPath: '',
-        ),
-        FolderFile(
-          name: 'Temp Project',
-          isFolder: true,
-          bucket: 'pastpaper1',
-          fullPath: '',
-        ),
-      ];
-    }
-    // Otherwise, get from cache
     final usedBucket = (bucket == null || bucket.isEmpty) ? 'pastpapers' : bucket;
     return _cache[usedBucket]?[folderPath];
   }
 
-  // Fetch root folders/files for a specific bucket (default: null = show both buckets as folders)
+  // Fetch root folders/files for a specific bucket (default: null = show main bucket at root)
   Future<void> fetchRootFoldersAndFiles({String? bucket, bool force = false}) async {
     _loading = true;
     _error = null;
     notifyListeners();
 
     try {
-      if (bucket == null || bucket.isEmpty) {
-        // Show both buckets as "folders" at the root
-        _items = [
-          FolderFile(
-            name: 'Main Project',
-            isFolder: true,
-            bucket: 'pastpapers',
-            fullPath: '',
-          ),
-          FolderFile(
-            name: 'Temp Project',
-            isFolder: true,
-            bucket: 'pastpaper1',
-            fullPath: '',
-          ),
-        ];
-        _currentBucket = '';
-        _currentPath = '';
+      final mainBucket = (bucket == null || bucket.isEmpty) ? 'pastpapers' : bucket;
+      final client = Supabase.instance.client;
+      bool cacheEmpty = (_cache[mainBucket]?[''] == null);
+
+      if (cacheEmpty || force) {
+        final rootItems = await _fetchFolder(client, mainBucket, '');
+        _cache[mainBucket] = {'': rootItems};
+        _items = rootItems;
       } else {
-        final mainBucket = bucket;
-        final client = mainBucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
-        bool cacheEmpty = (_cache[mainBucket]?[''] == null);
-
-        if (cacheEmpty || force) {
-          final rootItems = await _fetchFolder(client, mainBucket, '');
-          _cache[mainBucket] = {'': rootItems};
-          _items = rootItems;
-        } else {
-          _items = _cache[mainBucket]?[''] ?? [];
-        }
-
-        _currentBucket = mainBucket;
-        _currentPath = '';
+        _items = _cache[mainBucket]?[''] ?? [];
       }
+
+      _currentBucket = mainBucket;
+      _currentPath = '';
     } catch (e) {
       _error = 'Failed to fetch files/folders. Please check your internet connection and try again.';
       _items = [];
@@ -209,7 +173,7 @@ class PastPaperProvider extends ChangeNotifier {
       if (cached != null && !force) {
         _items = cached;
       } else {
-        final client = usedBucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+        final client = Supabase.instance.client;
         final items = await _fetchFolder(client, usedBucket, folderPath);
         _items = items;
         _cache[usedBucket] ??= {};
@@ -229,6 +193,98 @@ class PastPaperProvider extends ChangeNotifier {
   void clearItems() {
     _items = [];
     notifyListeners();
+  }
+
+  /// Search all files/folders in all buckets/paths by name (case-insensitive, recursive, real-time)
+  Future<List<FolderFile>> searchAllRealtime(String query) async {
+    if (query.trim().isEmpty) return [];
+    final lowerQuery = query.toLowerCase();
+    final List<FolderFile> results = [];
+    final client = Supabase.instance.client;
+    // Only using 'pastpapers' bucket as per app logic
+    await _searchFolderRecursive(client, 'pastpapers', '', lowerQuery, results);
+    return results;
+  }
+
+  /// Stream search: emits FolderFile as soon as found (for improved UI)
+  Future<void> searchAllRealtimeStream(String query, StreamController<FolderFile> controller) async {
+    if (query.trim().isEmpty) {
+      controller.close();
+      return;
+    }
+    final lowerQuery = query.toLowerCase();
+    final client = Supabase.instance.client;
+    await _searchFolderRecursiveStream(client, 'pastpapers', '', lowerQuery, controller);
+    await controller.close();
+  }
+
+  // Helper: recursively search folders/files in Supabase storage
+  Future<void> _searchFolderRecursive(
+    SupabaseClient client,
+    String bucket,
+    String folderPath,
+    String lowerQuery,
+    List<FolderFile> results,
+  ) async {
+    final response = await client.storage.from(bucket).list(path: folderPath);
+    for (final item in response) {
+      final rawName = item.name;
+      if (rawName == '.keep' || rawName == '.emptyFolderPlaceholder') continue;
+      bool isFolder = false;
+      String displayName = rawName;
+      if (rawName.endsWith('_folder')) {
+        isFolder = true;
+        displayName = rawName.substring(0, rawName.length - '_folder'.length);
+      } else {
+        isFolder = item.metadata == null && !rawName.contains('.');
+      }
+      final fullPath = folderPath.isEmpty ? rawName : '$folderPath/$rawName';
+      if (displayName.toLowerCase().contains(lowerQuery)) {
+        results.add(FolderFile(
+          name: displayName,
+          isFolder: isFolder,
+          bucket: bucket,
+          fullPath: fullPath,
+        ));
+      }
+      if (isFolder) {
+        await _searchFolderRecursive(client, bucket, fullPath, lowerQuery, results);
+      }
+    }
+  }
+
+  Future<void> _searchFolderRecursiveStream(
+    SupabaseClient client,
+    String bucket,
+    String folderPath,
+    String lowerQuery,
+    StreamController<FolderFile> controller,
+  ) async {
+    final response = await client.storage.from(bucket).list(path: folderPath);
+    for (final item in response) {
+      final rawName = item.name;
+      if (rawName == '.keep' || rawName == '.emptyFolderPlaceholder') continue;
+      bool isFolder = false;
+      String displayName = rawName;
+      if (rawName.endsWith('_folder')) {
+        isFolder = true;
+        displayName = rawName.substring(0, rawName.length - '_folder'.length);
+      } else {
+        isFolder = item.metadata == null && !rawName.contains('.');
+      }
+      final fullPath = folderPath.isEmpty ? rawName : '$folderPath/$rawName';
+      if (displayName.toLowerCase().contains(lowerQuery)) {
+        controller.add(FolderFile(
+          name: displayName,
+          isFolder: isFolder,
+          bucket: bucket,
+          fullPath: fullPath,
+        ));
+      }
+      if (isFolder) {
+        await _searchFolderRecursiveStream(client, bucket, fullPath, lowerQuery, controller);
+      }
+    }
   }
 }
 
@@ -265,7 +321,7 @@ Future<int> getFolderItemCount(BuildContext context, FolderFile folder) async {
         .length;
   }
   // If not cached, fetch and filter
-  final client = folder.bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  final client = Supabase.instance.client;
   final items = await client.storage.from(folder.bucket).list(path: folder.fullPath);
   return items
       .where((item) => item.name != '.keep' && item.name != '.emptyFolderPlaceholder')
@@ -274,7 +330,7 @@ Future<int> getFolderItemCount(BuildContext context, FolderFile folder) async {
 
 // Download logic
 Future<void> downloadFile(BuildContext context, FolderFile file) async {
-  final client = file.bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  final client = Supabase.instance.client;
   final url = client.storage.from(file.bucket).getPublicUrl(file.fullPath);
   final filename = file.name;
   final savePath = '/storage/emulated/0/Download/$filename';
@@ -333,7 +389,7 @@ Future<void> downloadFile(BuildContext context, FolderFile file) async {
 
 // Helper to build file URL using correct SupabaseClient and bucket
 String buildFileUrl(String bucket, String filePath) {
-  final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  final client = Supabase.instance.client;
   return client.storage.from(bucket).getPublicUrl(filePath);
 }
 
@@ -551,7 +607,7 @@ Future<void> createFolder({
   final fullPath = folderPath.isEmpty ? folderObjectName : '$folderPath/$folderObjectName';
 
   // Use correct client for temp bucket
-  final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+  final client = Supabase.instance.client;
 
   try {
     // Create a temporary empty file to represent the folder
@@ -639,8 +695,7 @@ Future<void> _pickAndUploadImage(
   scaffold.showSnackBar(uploadingSnackBar);
 
   try {
-    // Use correct client for temp bucket
-    final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+    final client = Supabase.instance.client;
 
     await client.storage.from(bucket).upload(
       storagePath,
@@ -731,8 +786,7 @@ Future<void> _pickAndUploadPDF(
   scaffold.showSnackBar(uploadingSnackBar);
 
   try {
-    // Use correct client for temp bucket
-    final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+    final client = Supabase.instance.client;
 
     await client.storage.from(bucket).upload(
       storagePath,
@@ -822,8 +876,7 @@ Future<void> _pickAndUploadAny(
   scaffold.showSnackBar(uploadingSnackBar);
 
   try {
-    // Use correct client for temp bucket
-    final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
+    final client = Supabase.instance.client;
 
     await client.storage.from(bucket).upload(
       storagePath,
@@ -873,14 +926,16 @@ Future<bool> renameItem({
   required String newName,
 }) async {
   final bucket = item.bucket;
-  final client = bucket == 'pastpaper1' ? tempSupabaseClient : Supabase.instance.client;
-  // Ensure correct parent path and new full path
+  final client = Supabase.instance.client;
   final parentPath = item.fullPath.contains('/') ? item.fullPath.substring(0, item.fullPath.lastIndexOf('/')) : '';
   final newFullPath = parentPath.isEmpty ? newName : '$parentPath/$newName';
 
   try {
     if (item.isFolder) {
-      // 1. Create the new folder "file" at the correct path
+      // Recursively copy all contents to new folder path
+      await _copyFolderRecursive(client, bucket, item.fullPath, newFullPath);
+
+      // Create empty folder marker for new folder
       final tempDir = Directory.systemTemp;
       final tempFile = await File('${tempDir.path}/empty_folder_placeholder').create();
       await tempFile.writeAsBytes([]);
@@ -891,20 +946,9 @@ Future<bool> renameItem({
       );
       await tempFile.delete();
 
-      // 2. Copy all contents to new folder path
-      final contents = await client.storage.from(bucket).list(path: item.fullPath);
-      for (final subItem in contents) {
-        final oldSubPath = '${item.fullPath}/${subItem.name}';
-        final newSubPath = '$newFullPath/${subItem.name}';
-        final fileBytes = await client.storage.from(bucket).download(oldSubPath);
-        await client.storage.from(bucket).upload(newSubPath, File.fromRawPath(fileBytes), fileOptions: const FileOptions(upsert: true));
-      }
+      // Recursively delete old folder and its contents
+      await _deleteFolderRecursive(client, bucket, item.fullPath);
 
-      // 3. Delete old folder and its contents
-      for (final subItem in contents) {
-        await client.storage.from(bucket).remove(['${item.fullPath}/${subItem.name}']);
-      }
-      await client.storage.from(bucket).remove([item.fullPath]);
     } else {
       // File: copy to new full path, delete old
       final fileBytes = await client.storage.from(bucket).download(item.fullPath);
@@ -923,3 +967,57 @@ Future<bool> renameItem({
     return false;
   }
 }
+
+// Helper: recursively copy all files/folders from oldPath to newPath
+Future<void> _copyFolderRecursive(
+  SupabaseClient client,
+  String bucket,
+  String oldPath,
+  String newPath,
+) async {
+  final items = await client.storage.from(bucket).list(path: oldPath);
+  for (final item in items) {
+    final oldItemPath = '$oldPath/${item.name}';
+    final newItemPath = '$newPath/${item.name}';
+    final isFolder = item.name.endsWith('_folder');
+    if (isFolder) {
+      // Recursively copy subfolder
+      await _copyFolderRecursive(client, bucket, oldItemPath, newItemPath);
+      // Create empty folder marker for subfolder
+      final tempDir = Directory.systemTemp;
+      final tempFile = await File('${tempDir.path}/empty_folder_placeholder').create();
+      await tempFile.writeAsBytes([]);
+      await client.storage.from(bucket).upload(
+        newItemPath,
+        tempFile,
+        fileOptions: const FileOptions(upsert: false, contentType: 'application/x-empty'),
+      );
+      await tempFile.delete();
+    } else {
+      // Copy file
+      final fileBytes = await client.storage.from(bucket).download(oldItemPath);
+      await client.storage.from(bucket).upload(newItemPath, File.fromRawPath(fileBytes), fileOptions: const FileOptions(upsert: true));
+    }
+  }
+}
+
+// Helper: recursively delete all files/folders under a folder
+Future<void> _deleteFolderRecursive(
+  SupabaseClient client,
+  String bucket,
+  String folderPath,
+) async {
+  final items = await client.storage.from(bucket).list(path: folderPath);
+  for (final item in items) {
+    final itemPath = '$folderPath/${item.name}';
+    final isFolder = item.name.endsWith('_folder');
+    if (isFolder) {
+      await _deleteFolderRecursive(client, bucket, itemPath);
+      await client.storage.from(bucket).remove([itemPath]);
+    } else {
+      await client.storage.from(bucket).remove([itemPath]);
+    }
+  }
+  await client.storage.from(bucket).remove([folderPath]);
+}
+
