@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:async';
+import 'package:path/path.dart' as p; // <-- Add this import
 
 class FolderFile {
   final String name;
@@ -501,8 +502,10 @@ Future<void> _showImageSourceDialog(
 
 // Prompt user for a new file name (returns null if cancelled)
 Future<String?> promptForFileName(BuildContext context, String originalName) async {
-  final ext = originalName.contains('.') ? '.${originalName.split('.').last}' : '';
-  final controller = TextEditingController(text: originalName.replaceAll(ext, ''));
+  // Use path package to split extension safely
+  final ext = p.extension(originalName);
+  final baseName = ext.isNotEmpty ? originalName.substring(0, originalName.length - ext.length) : originalName;
+  final controller = TextEditingController(text: baseName);
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -952,7 +955,12 @@ Future<bool> renameItem({
     } else {
       // File: copy to new full path, delete old
       final fileBytes = await client.storage.from(bucket).download(item.fullPath);
-      await client.storage.from(bucket).upload(newFullPath, File.fromRawPath(fileBytes), fileOptions: const FileOptions(upsert: true));
+      // Use a temp file for upload
+      final tempDir = Directory.systemTemp;
+      final tempFile = await File('${tempDir.path}/temp_rename_file').create();
+      await tempFile.writeAsBytes(fileBytes);
+      await client.storage.from(bucket).upload(newFullPath, tempFile, fileOptions: const FileOptions(upsert: true));
+      await tempFile.delete();
       await client.storage.from(bucket).remove([item.fullPath]);
     }
     ScaffoldMessenger.of(context).showSnackBar(
@@ -1020,4 +1028,3 @@ Future<void> _deleteFolderRecursive(
   }
   await client.storage.from(bucket).remove([folderPath]);
 }
-
