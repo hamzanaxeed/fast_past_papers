@@ -9,7 +9,17 @@ class PdfViewerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Directly use OtherViewer for PDF preview
-    return OtherViewer(url: url, name: name);
+    // Show a loading indicator for a short moment before showing OtherViewer
+    return FutureBuilder(
+      future: Future.delayed(const Duration(milliseconds: 150)),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return OtherViewer(url: url, name: name);
+      },
+    );
   }
 }

@@ -80,9 +80,13 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
       final response = await Supabase.instance.client.storage
           .from('timetable')
           .list(path: path);
+      // Filter out .keep and .emptyFolderPlaceholder files
+      final filtered = response.where((item) =>
+        item.name != '.keep' && item.name != '.emptyFolderPlaceholder'
+      ).toList();
       setState(() {
         currentPath = path;
-        items = response;
+        items = filtered;
         loading = false;
       });
     } catch (e) {
@@ -698,7 +702,15 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
         final oldPath = currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
         final parentPath = oldPath.contains('/') ? oldPath.substring(0, oldPath.lastIndexOf('/')) : '';
         final newPath = parentPath.isEmpty ? newFolderName : '$parentPath/$newFolderName';
-        await _moveFolderRecursively(oldPath, newPath);
+
+        // Recursively copy all contents to new folder path
+        await _copyFolderRecursively(oldPath, newPath);
+
+        // DO NOT upload an empty marker file for the new folder (fixes duplicate/copy issue)
+
+        // Recursively delete old folder and its contents
+        await _deleteFolderRecursively(oldPath);
+
       } else {
         final oldPath = currentPath.isEmpty ? file.name : '$currentPath/${file.name}';
         final parentPath = oldPath.contains('/') ? oldPath.substring(0, oldPath.lastIndexOf('/')) : '';
@@ -722,7 +734,8 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
     }
   }
 
-  Future<void> _moveFolderRecursively(String oldPath, String newPath) async {
+  // Recursively copy all files/folders from oldPath to newPath
+  Future<void> _copyFolderRecursively(String oldPath, String newPath) async {
     final contents = await Supabase.instance.client.storage
         .from('timetable')
         .list(path: oldPath);
@@ -730,19 +743,22 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
       final oldItemPath = '$oldPath/${item.name}';
       final newItemPath = '$newPath/${item.name}';
       if (_isFolder(item)) {
-        await _moveFolderRecursively(oldItemPath, newItemPath);
+        await _copyFolderRecursively(oldItemPath, newItemPath);
+        // DO NOT upload an empty marker file for subfolder (fixes duplicate/copy issue)
       } else {
-        await Supabase.instance.client.storage
-            .from('timetable')
-            .move(oldItemPath, newItemPath);
+        // Copy file
+        final fileBytes = await Supabase.instance.client.storage.from('timetable').download(oldItemPath);
+        final tempDir = Directory.systemTemp;
+        final tempFile = await File('${tempDir.path}/temp_rename_file').create();
+        await tempFile.writeAsBytes(fileBytes);
+        await Supabase.instance.client.storage.from('timetable').upload(
+          newItemPath,
+          tempFile,
+          fileOptions: const FileOptions(upsert: true),
+        );
+        await tempFile.delete();
       }
     }
-    // Optionally, remove the old folder's .keep file if present
-    try {
-      await Supabase.instance.client.storage
-          .from('timetable')
-          .remove(['$oldPath/.keep']);
-    } catch (_) {}
   }
 
   // --- 3-dot menu for admin and user actions (same as homeScreen) ---
@@ -951,128 +967,146 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : error != null
                       ? Center(child: Text(error!, style: const TextStyle(color: Colors.red)))
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                          itemCount: items.length,
-                          itemBuilder: (context, index) {
-                            final file = items[index];
-                            final isFolder = _isFolder(file);
-                            final selected = _selectedItems.contains(file.name);
-                            return GestureDetector(
-                              onLongPress: admin
-                                  ? () async {
-                                      if (_selectionMode) return;
-                                      showModalBottomSheet(
-                                        context: context,
-                                        shape: const RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-                                        ),
-                                        builder: (ctx) => SafeArea(
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              ListTile(
-                                                leading: const Icon(Icons.select_all, color: Colors.deepPurple),
-                                                title: const Text('Select More'),
-                                                onTap: () {
-                                                  Navigator.pop(ctx);
-                                                  setState(() {
-                                                    _selectionMode = true;
-                                                    _selectedItems = {file.name};
-                                                  });
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(Icons.delete, color: Colors.red),
-                                                title: const Text('Delete'),
-                                                onTap: () async {
-                                                  Navigator.pop(ctx);
-                                                  await _deleteFileOrFolder(file);
-                                                },
-                                              ),
-                                              ListTile(
-                                                leading: const Icon(Icons.drive_file_rename_outline, color: Colors.deepPurple),
-                                                title: const Text('Rename'),
-                                                onTap: () async {
-                                                  Navigator.pop(ctx);
-                                                  await _showRenameDialog(file);
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  : null,
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 10),
-                                decoration: _cardDecoration(
-                                  color: isFolder ? Colors.deepPurple.withOpacity(0.08) : null,
-                                ),
-                                child: ListTile(
-                                  leading: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.deepPurple.withOpacity(0.40),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    padding: const EdgeInsets.all(6),
-                                    child: isFolder
-                                        ? const Icon(Icons.folder, color: Colors.white, size: 32)
-                                        : _isImage(file.name)
-                                            ? const Icon(Icons.image, color: Colors.white, size: 28)
-                                            : _isPdf(file.name)
-                                                ? const Icon(Icons.picture_as_pdf, color: Colors.white, size: 28)
-                                                : _isPptx(file.name)
-                                                    ? const Icon(Icons.slideshow, color: Colors.white, size: 28)
-                                                    : _isDocx(file.name)
-                                                        ? const Icon(Icons.description, color: Colors.white, size: 28)
-                                                        : _isXlsx(file.name)
-                                                            ? const Icon(Icons.table_chart, color: Colors.white, size: 28)
-                                                            : _isTxt(file.name)
-                                                                ? const Icon(Icons.text_snippet, color: Colors.white, size: 28)
-                                                                : const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
-                                  ),
-                                  title: Text(
-                                    isFolder ? file.name.replaceAll('_folder', '') : file.name,
+                      : items.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.folder_open, color: Colors.white54, size: 64),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'Nothing to show',
                                     style: TextStyle(
-                                      fontWeight: isFolder ? FontWeight.bold : FontWeight.w600,
-                                      fontSize: isFolder ? 20 : 18,
-                                      color: isFolder ? Colors.white : Colors.deepPurple,
-                                      letterSpacing: 0.2,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white70,
                                     ),
                                   ),
-                                  onTap: _selectionMode
-                                      ? () {
-                                          setState(() {
-                                            if (_selectedItems.contains(file.name)) {
-                                              _selectedItems.remove(file.name);
-                                            } else {
-                                              _selectedItems.add(file.name);
-                                            }
-                                          });
-                                        }
-                                      : () => _onTapItem(file),
-                                  trailing: _selectionMode
-                                      ? Checkbox(
-                                          value: selected,
-                                          onChanged: (val) {
-                                            setState(() {
-                                              if (val == true) {
-                                                _selectedItems.add(file.name);
-                                              } else {
-                                                _selectedItems.remove(file.name);
-                                              }
-                                            });
-                                          },
-                                        )
-                                      : null,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  hoverColor: Colors.deepPurple.withOpacity(0.13),
-                                ),
+                                ],
                               ),
-                            );
-                          },
-                        ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                              itemCount: items.length,
+                              itemBuilder: (context, index) {
+                                final file = items[index];
+                                final isFolder = _isFolder(file);
+                                final selected = _selectedItems.contains(file.name);
+                                return GestureDetector(
+                                  onLongPress: admin
+                                      ? () async {
+                                          if (_selectionMode) return;
+                                          showModalBottomSheet(
+                                            context: context,
+                                            shape: const RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+                                            ),
+                                            builder: (ctx) => SafeArea(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  ListTile(
+                                                    leading: const Icon(Icons.select_all, color: Colors.deepPurple),
+                                                    title: const Text('Select More'),
+                                                    onTap: () {
+                                                      Navigator.pop(ctx);
+                                                      setState(() {
+                                                        _selectionMode = true;
+                                                        _selectedItems = {file.name};
+                                                      });
+                                                    },
+                                                  ),
+                                                  ListTile(
+                                                    leading: const Icon(Icons.delete, color: Colors.red),
+                                                    title: const Text('Delete'),
+                                                    onTap: () async {
+                                                      Navigator.pop(ctx);
+                                                      await _deleteFileOrFolder(file);
+                                                    },
+                                                  ),
+                                                  ListTile(
+                                                    leading: const Icon(Icons.drive_file_rename_outline, color: Colors.deepPurple),
+                                                    title: const Text('Rename'),
+                                                    onTap: () async {
+                                                      Navigator.pop(ctx);
+                                                      await _showRenameDialog(file);
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      : null,
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(vertical: 10),
+                                    decoration: _cardDecoration(
+                                      color: isFolder ? Colors.deepPurple.withOpacity(0.08) : null,
+                                    ),
+                                    child: ListTile(
+                                      leading: Container(
+                                        decoration: BoxDecoration(
+                                          color: Colors.deepPurple.withOpacity(0.40),
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        padding: const EdgeInsets.all(6),
+                                        child: isFolder
+                                            ? const Icon(Icons.folder, color: Colors.white, size: 32)
+                                            : _isImage(file.name)
+                                                ? const Icon(Icons.image, color: Colors.white, size: 28)
+                                                : _isPdf(file.name)
+                                                    ? const Icon(Icons.picture_as_pdf, color: Colors.white, size: 28)
+                                                    : _isPptx(file.name)
+                                                        ? const Icon(Icons.slideshow, color: Colors.white, size: 28)
+                                                        : _isDocx(file.name)
+                                                            ? const Icon(Icons.description, color: Colors.white, size: 28)
+                                                            : _isXlsx(file.name)
+                                                                ? const Icon(Icons.table_chart, color: Colors.white, size: 28)
+                                                                : _isTxt(file.name)
+                                                                    ? const Icon(Icons.text_snippet, color: Colors.white, size: 28)
+                                                                    : const Icon(Icons.insert_drive_file, color: Colors.white, size: 28),
+                                      ),
+                                      title: Text(
+                                        isFolder ? file.name.replaceAll('_folder', '') : file.name,
+                                        style: TextStyle(
+                                          fontWeight: isFolder ? FontWeight.bold : FontWeight.w600,
+                                          fontSize: isFolder ? 20 : 18,
+                                          color: isFolder ? Colors.white : Colors.deepPurple,
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                      onTap: _selectionMode
+                                          ? () {
+                                              setState(() {
+                                                if (_selectedItems.contains(file.name)) {
+                                                  _selectedItems.remove(file.name);
+                                                } else {
+                                                  _selectedItems.add(file.name);
+                                                }
+                                              });
+                                            }
+                                          : () => _onTapItem(file),
+                                      trailing: _selectionMode
+                                          ? Checkbox(
+                                              value: selected,
+                                              onChanged: (val) {
+                                                setState(() {
+                                                  if (val == true) {
+                                                    _selectedItems.add(file.name);
+                                                  } else {
+                                                    _selectedItems.remove(file.name);
+                                                  }
+                                                });
+                                              },
+                                            )
+                                          : null,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                      hoverColor: Colors.deepPurple.withOpacity(0.13),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
             ),
           ),
         );

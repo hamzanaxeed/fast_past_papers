@@ -14,6 +14,8 @@ class ImageViewer extends StatefulWidget {
 class _ImageViewerState extends State<ImageViewer> {
   bool _showOverlay = true;
   TransformationController _transformationController = TransformationController();
+  bool _loading = true;
+  bool _error = false;
 
   bool get _isZoomedIn {
     final matrix = _transformationController.value;
@@ -60,17 +62,58 @@ class _ImageViewerState extends State<ImageViewer> {
                 child: SizedBox.expand(
                   child: FittedBox(
                     fit: BoxFit.contain,
-                    child: Image.network(
-                      widget.url,
-                      loadingBuilder: (context, child, progress) {
-                        if (progress == null) return child;
-                        return Center(
-                          child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
-                        );
-                      },
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(Icons.broken_image, color: Colors.red, size: 60),
-                      ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (_loading)
+                          const SizedBox(
+                            width: 80,
+                            height: 80,
+                            child: Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+                        AnimatedOpacity(
+                          opacity: _loading ? 0 : 1,
+                          duration: const Duration(milliseconds: 300),
+                          child: Image.network(
+                            widget.url,
+                            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                              if (wasSynchronouslyLoaded) {
+                                _loading = false;
+                                return child;
+                              }
+                              if (frame == null) {
+                                return const SizedBox.shrink();
+                              } else {
+                                if (_loading) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    if (mounted) setState(() => _loading = false);
+                                  });
+                                }
+                                return child;
+                              }
+                            },
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const SizedBox.shrink();
+                            },
+                            errorBuilder: (_, __, ___) {
+                              if (!_error) {
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  if (mounted) setState(() {
+                                    _error = true;
+                                    _loading = false;
+                                  });
+                                });
+                              }
+                              return const Center(
+                                child: Icon(Icons.broken_image, color: Colors.red, size: 60),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

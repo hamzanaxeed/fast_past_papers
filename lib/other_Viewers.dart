@@ -25,6 +25,7 @@ class _OtherViewerState extends State<OtherViewer> {
   String? _error;
   bool _webViewError = false;
   bool _webViewReady = false;
+  bool _webViewLoading = false; // Add this
   late final WebViewController _webViewController;
 
   String? _textPreview;
@@ -79,23 +80,31 @@ class _OtherViewerState extends State<OtherViewer> {
     if (isSupportedForDocsViewer && isHttps) {
       final fileUrl = Uri.encodeComponent(widget.url);
       final viewerUrl = 'https://docs.google.com/gview?embedded=true&url=$fileUrl';
+      _webViewLoading = true;
       _webViewController = WebViewController()
         ..setJavaScriptMode(JavaScriptMode.unrestricted)
         ..setNavigationDelegate(NavigationDelegate(
+          onPageStarted: (_) {
+            setState(() {
+              _webViewLoading = true;
+            });
+          },
           onPageFinished: (_) {
             setState(() {
               _webViewReady = true;
+              _webViewLoading = false;
             });
           },
           onWebResourceError: (error) {
             setState(() {
               _webViewError = true;
+              _webViewLoading = false;
             });
           },
         ))
         ..loadRequest(Uri.parse(viewerUrl));
       // Always show WebView for supported types
-      _webViewReady = true;
+      _webViewReady = false;
     } else if (isSupportedForTextPreview) {
       _loadTextPreview();
     }
@@ -274,69 +283,84 @@ class _OtherViewerState extends State<OtherViewer> {
           title: Text(widget.name, style: const TextStyle(fontWeight: FontWeight.bold)),
           elevation: 2,
         ),
-        body: Column(
+        body: Stack(
           children: [
-            Expanded(
+            AnimatedOpacity(
+              opacity: (_webViewReady && !_webViewLoading && !_webViewError) ? 1 : 0,
+              duration: const Duration(milliseconds: 250),
               child: _webViewError
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Unable to preview file.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 16, color: Colors.black54),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : (_webViewReady
-                      ? WebViewWidget(controller: _webViewController)
-                      : const Center(child: CircularProgressIndicator())),
+                  ? const SizedBox.shrink()
+                  : WebViewWidget(controller: _webViewController),
             ),
-            if (_downloading)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Column(
-                  children: [
-                    Text(
-                      'Downloading... ${(_downloadProgress * 100).toStringAsFixed(0)}%',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+            if (_webViewLoading && !_webViewError)
+              const Center(child: CircularProgressIndicator()),
+            if (_webViewError)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Unable to preview file.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 16, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            // ...existing download/error widgets...
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_downloading)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Downloading... ${(_downloadProgress * 100).toStringAsFixed(0)}%',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blue),
+                          ),
+                          const SizedBox(height: 8),
+                          LinearProgressIndicator(
+                            value: _downloadProgress,
+                            minHeight: 8,
+                            backgroundColor: Colors.blue.shade100,
+                            color: Colors.blue,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: _downloadProgress,
-                      minHeight: 8,
-                      backgroundColor: Colors.blue.shade100,
-                      color: Colors.blue,
-                      borderRadius: BorderRadius.circular(8),
+                  if (_downloadPath != null && !_downloading)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        'Saved to: $_downloadPath',
+                        style: const TextStyle(fontSize: 14, color: Colors.green),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
-                  ],
-                ),
+                  if (_error != null && !_downloading)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _error!,
+                        style: const TextStyle(fontSize: 14, color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
               ),
-            if (_downloadPath != null && !_downloading)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  'Saved to: $_downloadPath',
-                  style: const TextStyle(fontSize: 14, color: Colors.green),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            if (_error != null && !_downloading)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _error!,
-                  style: const TextStyle(fontSize: 14, color: Colors.red),
-                  textAlign: TextAlign.center,
-                ),
-              ),
+            ),
           ],
         ),
       );
@@ -367,21 +391,29 @@ class _OtherViewerState extends State<OtherViewer> {
             ),
           ],
         ),
-        body: _textLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _textError != null
-                ? Center(child: Text(_textError!, style: const TextStyle(color: Colors.red)))
-                : _textPreview != null
-                    ? Scrollbar(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: SelectableText(
-                            _textPreview!,
-                            style: const TextStyle(fontSize: 15, fontFamily: 'monospace'),
-                          ),
+        body: Stack(
+          children: [
+            AnimatedOpacity(
+              opacity: (_textPreview != null && !_textLoading && _textError == null) ? 1 : 0,
+              duration: const Duration(milliseconds: 250),
+              child: _textPreview != null
+                  ? Scrollbar(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: SelectableText(
+                          _textPreview!,
+                          style: const TextStyle(fontSize: 15, fontFamily: 'monospace'),
                         ),
-                      )
-                    : const Center(child: Text('No preview available')),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            if (_textLoading)
+              const Center(child: CircularProgressIndicator()),
+            if (_textError != null)
+              Center(child: Text(_textError!, style: const TextStyle(color: Colors.red))),
+          ],
+        ),
       );
     }
 
