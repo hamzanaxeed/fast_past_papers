@@ -18,6 +18,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
   late Future<List<Map<String, dynamic>>> _logsFuture;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool isAdmin = true; // <-- Replace with your actual admin check
 
   @override
   void initState() {
@@ -31,7 +32,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
     final response = await Supabase.instance.client
         .from(table)
         .select()
-        .order('Time', ascending: false);
+        .order('Time', ascending: false); // <-- No .limit(1000)
     if (response is List) {
       return response.cast<Map<String, dynamic>>();
     }
@@ -232,6 +233,24 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
     }).toList();
   }
 
+  Future<void> _deleteLog(Map<String, dynamic> log) async {
+    final table = _selectedLogType == LogType.login ? 'log_table' : 'Edit_Log';
+    final id = log['id']; // assumes each log has a unique 'id' field
+    if (id == null) return;
+    await Supabase.instance.client.from(table).delete().eq('id', id);
+    setState(() {
+      _logsFuture = _fetchLogs();
+    });
+  }
+
+  Future<void> _deleteAllLogs() async {
+    final table = _selectedLogType == LogType.login ? 'log_table' : 'Edit_Log';
+    await Supabase.instance.client.from(table).delete();
+    setState(() {
+      _logsFuture = _fetchLogs();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -250,6 +269,33 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
               });
             },
           ),
+          if (isAdmin)
+            IconButton(
+              icon: const Icon(Icons.delete_forever, color: Colors.white),
+              tooltip: "Delete All Logs",
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Delete All Logs'),
+                    content: const Text('Are you sure you want to delete ALL logs of this type? This action cannot be undone.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Delete All', style: TextStyle(color: Colors.red)),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await _deleteAllLogs();
+                }
+              },
+            ),
         ],
       ),
       body: Container(
@@ -507,69 +553,152 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
                         final log = logs[i];
                         return Card(
                           elevation: 7,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
                           color: Colors.white,
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: _selectedLogType == LogType.login
-                                  ? Colors.teal.shade100
-                                  : Colors.deepPurple.shade100,
-                              child: Icon(
-                                _selectedLogType == LogType.login ? Icons.event_note : Icons.edit,
-                                color: _selectedLogType == LogType.login ? Colors.teal : Colors.deepPurple,
-                              ),
-                            ),
-                            title: Text(
-                              log['Event'] ?? '',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                                fontSize: 17,
-                              ),
-                            ),
-                            subtitle: Column(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Row(
-                                  children: [
-                                    const Text('User: ', style: TextStyle(color: Colors.black87)),
-                                    Expanded(
-                                      child: Text(
-                                        log['Email'] ?? '',
-                                        style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.w500),
+                                CircleAvatar(
+                                  backgroundColor: _selectedLogType == LogType.login
+                                      ? Colors.teal.shade100
+                                      : Colors.deepPurple.shade100,
+                                  child: Icon(
+                                    _selectedLogType == LogType.login
+                                        ? Icons.event_note
+                                        : Icons.edit,
+                                    color: _selectedLogType == LogType.login
+                                        ? Colors.teal
+                                        : Colors.deepPurple,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      /// Event title
+                                      Text(
+                                        log['Event'] ?? '',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
+                                          fontSize: 17,
+                                        ),
+                                        maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                  ],
-                                ),
-                                if (log['Details'] != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2.0),
-                                    child: Text(
-                                      'Details: ${log['Details']}',
-                                      style: const TextStyle(color: Colors.black87, fontSize: 14),
-                                    ),
-                                  ),
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 2.0),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.access_time, size: 15, color: Colors.grey),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        _formatDateTime(log['Time']),
-                                        style: const TextStyle(fontSize: 13, color: Colors.grey, fontWeight: FontWeight.w500),
+                                      const SizedBox(height: 4),
+
+                                      /// User row
+                                      Row(
+                                        children: [
+                                          const Text(
+                                            'User: ',
+                                            style: TextStyle(color: Colors.black87),
+                                          ),
+                                          Flexible(
+                                            child: Text(
+                                              log['Email'] ?? '',
+                                              style: const TextStyle(
+                                                color: Colors.black87,
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+
+                                      /// Details row
+                                      if (log['Details'] != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2.0),
+                                          child: Text(
+                                            'Details: ${log['Details']}',
+                                            style: const TextStyle(
+                                              color: Colors.black87,
+                                              fontSize: 14,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
+                                            maxLines: 2,
+                                            softWrap: true,
+                                          ),
+                                        ),
+
+                                      /// Time row
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2.0),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.access_time,
+                                                size: 15, color: Colors.grey),
+                                            const SizedBox(width: 4),
+                                            Flexible(
+                                              child: Text(
+                                                _formatDateTime(log['Time']),
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.grey,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ],
                                   ),
                                 ),
+
+                                /// Delete button (admin only)
+                                if (isAdmin)
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, color: Colors.red),
+                                    tooltip: 'Delete Log',
+                                    onPressed: () async {
+                                      final confirm = await showDialog<bool>(
+                                        context: context,
+                                        builder: (context) => AlertDialog(
+                                          title: const Text('Delete Log'),
+                                          content: const Text(
+                                              'Are you sure you want to delete this log?'),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, false),
+                                              child: const Text('Cancel'),
+                                            ),
+                                            TextButton(
+                                              onPressed: () =>
+                                                  Navigator.pop(context, true),
+                                              child: const Text(
+                                                'Delete',
+                                                style: TextStyle(color: Colors.red),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                      if (confirm == true) {
+                                        await _deleteLog(log);
+                                      }
+                                    },
+                                  ),
                               ],
                             ),
-                            isThreeLine: true,
                           ),
                         );
+
                       },
                     );
+
+
+
                   },
                 ),
               ),

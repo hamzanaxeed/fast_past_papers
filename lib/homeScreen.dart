@@ -6,7 +6,7 @@ import 'main.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'feedback.dart';
-import 'log.dart';
+import 'log.dart'; // <-- Add this import
 import 'message_File.dart';
 import 'options_Screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -465,8 +465,12 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
                                         try {
                                           if (item.isFolder) {
                                             await _deleteFolderRecursive(client, item.bucket, item.fullPath);
+                                            // --- Add edit log ---
+                                            await logEditEvent('Deleted folder "${item.fullPath}" in bucket "${item.bucket}"');
                                           } else {
                                             await client.storage.from(item.bucket).remove([item.fullPath]);
+                                            // --- Add edit log ---
+                                            await logEditEvent('Deleted file "${item.fullPath}" in bucket "${item.bucket}"');
                                           }
                                         } catch (_) {}
                                       }
@@ -658,8 +662,12 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
                                                 final client = Supabase.instance.client;
                                                 if (isFolder) {
                                                   await _deleteFolderRecursively(item.fullPath, item.bucket);
+                                                  // --- Add edit log ---
+                                                  await logEditEvent('Deleted folder "${item.fullPath}" in bucket "${item.bucket}"');
                                                 } else {
                                                   await client.storage.from(item.bucket).remove([item.fullPath]);
+                                                  // --- Add edit log ---
+                                                  await logEditEvent( 'Deleted file "${item.fullPath}" in bucket "${item.bucket}"');
                                                 }
                                                 ScaffoldMessenger.of(context).showSnackBar(
                                                   SnackBar(content: Text('Deleted "${item.name}"'), backgroundColor: Colors.green),
@@ -951,8 +959,12 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
                                             final client = Supabase.instance.client;
                                             if (isFolder) {
                                               await _deleteFolderRecursively(item.fullPath, item.bucket);
+                                              // --- Add edit log ---
+                                              await logEditEvent( 'Deleted folder "${item.fullPath}" in bucket "${item.bucket}"');
                                             } else {
                                               await client.storage.from(item.bucket).remove([item.fullPath]);
+                                              // --- Add edit log ---
+                                              await logEditEvent( 'Deleted file "${item.fullPath}" in bucket "${item.bucket}"');
                                             }
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               SnackBar(content: Text('Deleted "${item.name}"'), backgroundColor: Colors.green),
@@ -1180,6 +1192,8 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
         final parentPath = oldPath.contains('/') ? oldPath.substring(0, oldPath.lastIndexOf('/')) : '';
         final newPath = parentPath.isEmpty ? newFolderName : '$parentPath/$newFolderName';
         await _moveFolderRecursively(oldPath, newPath, file.bucket);
+        // --- Add edit log ---
+        await logEditEvent('Renamed folder "$oldPath" to "$newPath" in bucket "${file.bucket}"');
       } else {
         final oldPath = file.fullPath;
         final parentPath = oldPath.contains('/') ? oldPath.substring(0, oldPath.lastIndexOf('/')) : '';
@@ -1187,6 +1201,8 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
         await Supabase.instance.client.storage
             .from(file.bucket)
             .move(oldPath, newPath);
+        // --- Add edit log ---
+        await logEditEvent( 'Renamed file "$oldPath" to "$newPath" in bucket "${file.bucket}"');
       }
       refreshCurrentFolder(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1269,6 +1285,8 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
     }
     // Remove the folder marker itself
     await client.storage.from(bucket).remove([folderPath]);
+    // --- Add edit log ---
+    await logEditEvent('Deleted folder "$folderPath" in bucket "$bucket"');
   }
 
   @override

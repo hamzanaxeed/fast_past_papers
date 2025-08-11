@@ -371,11 +371,11 @@ class _MyAppState extends State<MyApp> {
           if (snapshot.connectionState == ConnectionState.active) {
             final user = snapshot.data;
             if (user != null) {
-              logUserEvent('App Opened');
+              logUserEvent('Login');
               _checkIfVersionIsWorkingForUser(context).then((_) {
                 showStartupMessage(context);
               });
-              return const OptionsScreen(); // <-- Change to OptionsScreen
+              return const OptionsScreen();
             } else {
               // Only show intro button on login page
               return Stack(

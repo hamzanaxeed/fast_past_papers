@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:async';
 import 'package:path/path.dart' as p; // <-- Add this import
+import 'log.dart'; // <-- Add this import
 
 class FolderFile {
   final String name;
@@ -46,7 +47,7 @@ class PastPaperProvider extends ChangeNotifier {
   set currentPath(String value) => _currentPath = value;
   set currentBucket(String? value) => _currentBucket = value ?? '';
 
-  // Prefetch all folders/files on startup (recursively for the entire project)
+  // Prefetch all folders/files on startup (recursively for the entire project, but only to depth 2)
   Future<void> prefetchAll() async {
     _loading = true;
     _error = null;
@@ -61,7 +62,8 @@ class PastPaperProvider extends ChangeNotifier {
       // Always clear cache before prefetch to avoid stale data
       for (final bucket in buckets) {
         _cache[bucket['name'] as String] = {};
-        await _prefetchBucket(bucket['client'] as SupabaseClient, bucket['name'] as String);
+        // Limit prefetch to depth 2
+        await _prefetchBucketDepth(bucket['client'] as SupabaseClient, bucket['name'] as String, maxDepth: 1);
       }
       debugPrint('[DEBUG] Prefetch complete. Cache keys: ${_cache.keys}');
       for (final bucket in _cache.entries) {
@@ -77,6 +79,33 @@ class PastPaperProvider extends ChangeNotifier {
       _items = [];
       _loading = false;
       notifyListeners();
+    }
+  }
+
+  // Prefetch with depth limit
+  Future<void> _prefetchBucketDepth(SupabaseClient client, String bucketName, {int maxDepth = 1}) async {
+    _cache[bucketName] = {};
+    await _recursivePrefetchDepth(client, bucketName, '', 0, maxDepth);
+    debugPrint('[DEBUG] Finished prefetch for bucket "$bucketName". Folder count: ${_cache[bucketName]?.length}');
+    notifyListeners();
+  }
+
+  // Recursively prefetch all folders/files in a bucket up to a certain depth
+  Future<void> _recursivePrefetchDepth(
+    SupabaseClient client,
+    String bucket,
+    String folderPath,
+    int currentDepth,
+    int maxDepth,
+  ) async {
+    debugPrint('[DEBUG] Fetching folder: bucket="$bucket", path="$folderPath", depth=$currentDepth');
+    final items = await _fetchFolder(client, bucket, folderPath);
+    debugPrint('[DEBUG] Folder "$folderPath" in bucket "$bucket" has ${items.length} items.');
+    _cache[bucket]![folderPath] = items;
+    if (currentDepth < maxDepth) {
+      for (final item in items.where((f) => f.isFolder)) {
+        await _recursivePrefetchDepth(client, bucket, item.fullPath, currentDepth + 1, maxDepth);
+      }
     }
   }
 
@@ -623,6 +652,8 @@ Future<void> createFolder({
       fileOptions: const FileOptions(upsert: false, contentType: 'application/x-empty'),
     );
     await tempFile.delete();
+    // --- Add edit log ---
+    await logEditEvent( 'Created folder "$folderName" at "$fullPath" in bucket "$bucket"');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Folder "$folderName" created!'), backgroundColor: Colors.green),
     );
@@ -705,6 +736,8 @@ Future<void> _pickAndUploadImage(
       file,
       fileOptions: const FileOptions(upsert: true),
     );
+    // --- Add edit log ---
+    await logEditEvent('Uploaded image "$newName" to "$storagePath" in bucket "$bucket"');
     progressController.value = 1.0;
     await Future.delayed(const Duration(milliseconds: 700));
     scaffold.hideCurrentSnackBar();
@@ -796,6 +829,8 @@ Future<void> _pickAndUploadPDF(
       file,
       fileOptions: const FileOptions(upsert: true),
     );
+    // --- Add edit log ---
+    await logEditEvent('Uploaded PDF "$newName" to "$storagePath" in bucket "$bucket"');
     progressController.value = 1.0;
     await Future.delayed(const Duration(milliseconds: 700));
     scaffold.hideCurrentSnackBar();
@@ -886,6 +921,8 @@ Future<void> _pickAndUploadAny(
       file,
       fileOptions: const FileOptions(upsert: true),
     );
+    // --- Add edit log ---
+    await logEditEvent( 'Uploaded file "$newName" to "$storagePath" in bucket "$bucket"');
     progressController.value = 1.0;
     await Future.delayed(const Duration(milliseconds: 700));
     scaffold.hideCurrentSnackBar();
@@ -952,6 +989,8 @@ Future<bool> renameItem({
       // Recursively delete old folder and its contents
       await _deleteFolderRecursive(client, bucket, item.fullPath);
 
+      // --- Add edit log ---
+      await logEditEvent( 'Renamed folder "${item.fullPath}" to "$newFullPath" in bucket "$bucket"');
     } else {
       // File: copy to new full path, delete old
       final fileBytes = await client.storage.from(bucket).download(item.fullPath);
@@ -962,6 +1001,8 @@ Future<bool> renameItem({
       await client.storage.from(bucket).upload(newFullPath, tempFile, fileOptions: const FileOptions(upsert: true));
       await tempFile.delete();
       await client.storage.from(bucket).remove([item.fullPath]);
+      // --- Add edit log ---
+      await logEditEvent('Renamed file "${item.fullPath}" to "$newFullPath" in bucket "$bucket"');
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Renamed successfully!'), backgroundColor: Colors.green),
@@ -1027,4 +1068,6 @@ Future<void> _deleteFolderRecursive(
     }
   }
   await client.storage.from(bucket).remove([folderPath]);
+  // --- Add edit log ---
+  await logEditEvent('Deleted folder "$folderPath" in bucket "$bucket"');
 }
