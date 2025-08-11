@@ -602,16 +602,40 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete'),
-        content: Text('Are you sure you want to delete "${file.name.replaceAll('_folder', '')}"?'),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        backgroundColor: Colors.white,
+        title: Row(
+          children: const [
+            Icon(Icons.delete, color: Colors.red, size: 28),
+            SizedBox(width: 10),
+            Text('Delete', style: TextStyle(color: Colors.deepPurple, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "${file.name.replaceAll('_folder', '')}"?',
+          style: const TextStyle(fontSize: 16, color: Colors.black87),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         actions: [
-          TextButton(
+          OutlinedButton(
             onPressed: () => Navigator.pop(ctx, false),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.deepPurple,
+              side: const BorderSide(color: Colors.deepPurple),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
             child: const Text('Cancel'),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Delete'),
           ),
         ],
       ),
