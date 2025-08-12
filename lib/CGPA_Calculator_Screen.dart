@@ -3,6 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'feedback.dart';
 import 'message_File.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
+import 'options_Screen.dart';
+import 'authentications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'contact_Us.dart';
 
 class CgpaCalculatorScreen extends StatefulWidget {
   const CgpaCalculatorScreen({Key? key}) : super(key: key);
@@ -13,7 +17,7 @@ class CgpaCalculatorScreen extends StatefulWidget {
 
 class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with SingleTickerProviderStateMixin {
   final List<Semester> _semesters = [Semester(gpa: '')];
-
+  final List<TextEditingController> _controllers = [TextEditingController()];
   double? cgpa;
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -25,50 +29,94 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    _loadSavedSemesters();
     super.initState();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _loadSavedSemesters() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('cgpa_semesters');
+    setState(() {
+      _semesters.clear();
+      _controllers.clear();
+      if (saved != null && saved.isNotEmpty) {
+        for (var gpa in saved) {
+          _semesters.add(Semester(gpa: gpa));
+          _controllers.add(TextEditingController(text: gpa));
+        }
+      } else {
+        _semesters.add(Semester(gpa: ''));
+        _controllers.add(TextEditingController());
+      }
+    });
+  }
+
+  Future<void> _saveSemesters() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('cgpa_semesters', _semesters.map((s) => s.gpa).toList());
   }
 
   void _addSemester() {
     setState(() {
       _semesters.add(Semester(gpa: ''));
+      _controllers.add(TextEditingController());
     });
+    _saveSemesters();
   }
 
   void _removeSemester(int index) {
     if (_semesters.length > 1) {
       setState(() {
         _semesters.removeAt(index);
+        _controllers.removeAt(index);
       });
+      _saveSemesters();
     }
   }
 
-  void _calculateCGPA() {
+  void _calculateCGPA() async {
     double totalGpa = 0;
     int count = 0;
+    bool hasError = false;
 
-    for (var semester in _semesters) {
-      final gpa = double.tryParse(semester.gpa) ?? 0;
+    for (int i = 0; i < _semesters.length; i++) {
+      final value = _controllers[i].text;
+      final gpa = double.tryParse(value);
+      if (gpa == null || gpa < 0 || gpa > 4) {
+        hasError = true;
+        break;
+      }
+      _semesters[i].gpa = value;
       totalGpa += gpa;
       count++;
     }
 
+    if (hasError || count == 0) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter valid GPA values (0.0 - 4.0) for all semesters.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      setState(() {
+        cgpa = null;
+      });
+      return;
+    }
+
     setState(() {
-      cgpa = count > 0 ? totalGpa / count : 0;
+      cgpa = totalGpa / count;
       _controller.forward(from: 0);
     });
+    await _saveSemesters();
   }
 
   int get totalSemesters => _semesters.length;
 
   Widget _buildSemesterTile(int index) {
-    final semester = _semesters[index];
-
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -106,12 +154,13 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
             Expanded(
               flex: 1,
               child: TextFormField(
-                initialValue: semester.gpa,
+                controller: _controllers[index],
                 decoration: InputDecoration(
                   labelText: 'GPA',
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                  errorStyle: const TextStyle(color: Colors.red),
                 ),
                 style: const TextStyle(fontSize: 14),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -119,13 +168,15 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
                 onChanged: (value) {
                   // Prevent negative input
                   if (value.startsWith('-')) return;
-                  semester.gpa = value;
+                  _semesters[index].gpa = value;
+                  _saveSemesters();
                 },
                 validator: (value) {
                   if (value == null || value.isEmpty) return null;
                   final numVal = double.tryParse(value);
-                  if (numVal != null && numVal < 0) return 'No negative values';
-                  if (numVal != null && numVal > 4) return 'Max GPA is 4.0';
+                  if (numVal == null) return 'Enter a valid number';
+                  if (numVal < 0) return 'No negative values';
+                  if (numVal > 4) return 'Max GPA is 4.0';
                   return null;
                 },
               ),
@@ -262,13 +313,21 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
               await showFeedbackOrAdminScreen(context);
             } else if (value == 'logout') {
               await FirebaseAuth.instance.signOut();
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                    (route) => false,
+              );
             } else if (value == 'manage_messages') {
               showManageMessagesDialog(context);
             } else if (value == 'editors') {
               // Navigate to manage editors screen
             } else if (value == 'logs') {
               // Navigate to view logs screen
+            } else if (value == 'contact_us') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+              );
             }
           },
           itemBuilder: (context) => [
@@ -322,6 +381,16 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
                   Icon(Icons.logout, color: Color(0xFF1976D2)),
                   SizedBox(width: 10),
                   Text('Logout'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'contact_us',
+              child: Row(
+                children: const [
+                  Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
+                  SizedBox(width: 10),
+                  Text('Contact Us'),
                 ],
               ),
             ),

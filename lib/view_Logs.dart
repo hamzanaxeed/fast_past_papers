@@ -251,6 +251,54 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
     });
   }
 
+  void _showLogDetailDialog(Map<String, dynamic> log) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            Icon(
+              _selectedLogType == LogType.login ? Icons.event_note : Icons.edit,
+              color: _selectedLogType == LogType.login ? Colors.teal : Colors.deepPurple,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                log['Event'] ?? 'Log Detail',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('User: ${log['Email'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w500)),
+              const SizedBox(height: 8),
+              if (log['Details'] != null)
+                Text('Details: ${log['Details']}', style: const TextStyle(fontSize: 15)),
+              const SizedBox(height: 8),
+              Text('Time: ${_formatDateTime(log['Time'])}', style: const TextStyle(color: Colors.grey)),
+              const SizedBox(height: 8),
+              if (log['id'] != null)
+                Text('Log ID: ${log['id']}', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+              // Add more fields if needed
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -551,7 +599,7 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 10),
                       itemBuilder: (context, i) {
                         final log = logs[i];
-                        return Card(
+                        Widget card = Card(
                           elevation: 7,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(18),
@@ -694,6 +742,15 @@ class _ViewLogsScreenState extends State<ViewLogsScreen> {
                           ),
                         );
 
+                        // Wrap card with GestureDetector for admin to show details
+                        if (isAdmin) {
+                          card = GestureDetector(
+                            onTap: () => _showLogDetailDialog(log),
+                            child: card,
+                          );
+                        }
+
+                        return card;
                       },
                     );
 

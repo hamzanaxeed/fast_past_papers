@@ -3,6 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart' as fire;
 import 'feedback.dart';
 import 'message_File.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
+import 'options_Screen.dart';
+import 'authentications.dart';
+import 'editor_Handling.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class TargetCgpaCalculatorScreen extends StatefulWidget {
   const TargetCgpaCalculatorScreen({Key? key}) : super(key: key);
@@ -68,8 +72,11 @@ class _TargetCgpaCalculatorScreenState extends State<TargetCgpaCalculatorScreen>
               }
               await showFeedbackOrAdminScreen(context);
             } else if (value == 'logout') {
-              await fire.FirebaseAuth.instance.signOut();
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              await FirebaseAuth.instance.signOut();
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                    (route) => false,
+              );
             } else if (value == 'manage_messages') {
               showManageMessagesDialog(context);
             }

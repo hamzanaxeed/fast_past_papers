@@ -3,6 +3,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'feedback.dart';
 import 'message_File.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supa;
+import 'options_Screen.dart';
+import 'authentications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'contact_Us.dart';
 
 class SgpaCalculatorScreen extends StatefulWidget {
   const SgpaCalculatorScreen({Key? key}) : super(key: key);
@@ -13,6 +17,9 @@ class SgpaCalculatorScreen extends StatefulWidget {
 
 class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with SingleTickerProviderStateMixin {
   final List<Subject> _subjects = [Subject(name: '', grade: 'A', credits: 3)];
+  final List<TextEditingController> _nameControllers = [TextEditingController()];
+  final List<TextEditingController> _creditControllers = [TextEditingController(text: '3')];
+  final List<String> _gradeControllers = ['A'];
 
   final Map<String, double> gradePoints = {
     "A+": 4.00,
@@ -39,51 +46,118 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
       vsync: this,
     );
     _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+    _loadSavedSubjects();
     super.initState();
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Future<void> _loadSavedSubjects() async {
+    final prefs = await SharedPreferences.getInstance();
+    final names = prefs.getStringList('sgpa_names');
+    final grades = prefs.getStringList('sgpa_grades');
+    final credits = prefs.getStringList('sgpa_credits');
+    setState(() {
+      _subjects.clear();
+      _nameControllers.clear();
+      _creditControllers.clear();
+      _gradeControllers.clear();
+      if (names != null && grades != null && credits != null &&
+          names.length == grades.length && grades.length == credits.length && names.isNotEmpty) {
+        for (int i = 0; i < names.length; i++) {
+          _subjects.add(Subject(
+            name: names[i],
+            grade: grades[i],
+            credits: int.tryParse(credits[i]) ?? 0,
+          ));
+          _nameControllers.add(TextEditingController(text: names[i]));
+          _creditControllers.add(TextEditingController(text: credits[i]));
+          _gradeControllers.add(grades[i]);
+        }
+      } else {
+        _subjects.add(Subject(name: '', grade: 'A', credits: 3));
+        _nameControllers.add(TextEditingController());
+        _creditControllers.add(TextEditingController(text: '3'));
+        _gradeControllers.add('A');
+      }
+    });
+  }
+
+  Future<void> _saveSubjects() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('sgpa_names', _subjects.map((s) => s.name).toList());
+    await prefs.setStringList('sgpa_grades', _subjects.map((s) => s.grade).toList());
+    await prefs.setStringList('sgpa_credits', _subjects.map((s) => s.credits.toString()).toList());
   }
 
   void _addSubject() {
     setState(() {
       _subjects.add(Subject(name: '', grade: 'A', credits: 3));
+      _nameControllers.add(TextEditingController());
+      _creditControllers.add(TextEditingController(text: '3'));
+      _gradeControllers.add('A');
     });
+    _saveSubjects();
   }
 
   void _removeSubject(int index) {
     if (_subjects.length > 1) {
       setState(() {
         _subjects.removeAt(index);
+        _nameControllers.removeAt(index);
+        _creditControllers.removeAt(index);
+        _gradeControllers.removeAt(index);
       });
+      _saveSubjects();
     }
   }
 
-  void _calculateSGPA() {
+  void _calculateSGPA() async {
     double totalGradePoints = 0;
     int totalCredits = 0;
+    bool hasError = false;
 
-    for (var subject in _subjects) {
-      final gp = gradePoints[subject.grade] ?? 0;
-      totalGradePoints += gp * subject.credits;
-      totalCredits += subject.credits;
+    for (int i = 0; i < _subjects.length; i++) {
+      final name = _nameControllers[i].text;
+      final grade = _gradeControllers[i];
+      final credits = int.tryParse(_creditControllers[i].text) ?? 0;
+      final gp = gradePoints[grade];
+      if (gp == null || credits <= 0) {
+        hasError = true;
+        break;
+      }
+      _subjects[i].name = name;
+      _subjects[i].grade = grade;
+      _subjects[i].credits = credits;
+      totalGradePoints += gp * credits;
+      totalCredits += credits;
+    }
+
+    if (hasError || totalCredits == 0) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter valid grades and credits for all subjects.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      setState(() {
+        sgpa = null;
+      });
+      return;
     }
 
     setState(() {
-      sgpa = totalCredits > 0 ? totalGradePoints / totalCredits : 0;
+      sgpa = totalGradePoints / totalCredits;
       _controller.forward(from: 0);
     });
+    await _saveSubjects();
   }
 
   int get totalCredits => _subjects.fold(0, (sum, subj) => sum + subj.credits);
   int get totalSubjects => _subjects.length;
 
   Widget _buildSubjectTile(int index) {
-    final subject = _subjects[index];
-
     return Card(
       elevation: 6,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -104,15 +178,22 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
                 const SizedBox(width: 12),
                 Expanded(
                   child: TextFormField(
-                    initialValue: subject.name,
+                    controller: _nameControllers[index],
                     decoration: InputDecoration(
                       labelText: 'Subject Name',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       isDense: true,
                       prefixIcon: const Icon(Icons.edit, color: Colors.deepPurple),
+                      errorStyle: const TextStyle(color: Colors.red),
                     ),
                     onChanged: (value) {
-                      subject.name = value;
+                      _subjects[index].name = value;
+                      _saveSubjects();
+                    },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return null;
+                      if (value.trim().isEmpty) return 'Enter subject name';
+                      return null;
                     },
                   ),
                 ),
@@ -130,12 +211,13 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
                 Expanded(
                   flex: 2,
                   child: DropdownButtonFormField<String>(
-                    value: subject.grade,
+                    value: _gradeControllers[index],
                     decoration: InputDecoration(
                       labelText: 'Grade',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       isDense: true,
                       prefixIcon: const Icon(Icons.grade, color: Colors.deepPurple),
+                      errorStyle: const TextStyle(color: Colors.red),
                     ),
                     items: gradePoints.keys.map((String grade) {
                       return DropdownMenuItem<String>(
@@ -145,7 +227,9 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
                     }).toList(),
                     onChanged: (value) {
                       setState(() {
-                        subject.grade = value!;
+                        _gradeControllers[index] = value!;
+                        _subjects[index].grade = value;
+                        _saveSubjects();
                       });
                     },
                   ),
@@ -154,24 +238,27 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
                 Expanded(
                   flex: 2,
                   child: TextFormField(
-                    initialValue: subject.credits.toString(),
+                    controller: _creditControllers[index],
                     decoration: InputDecoration(
                       labelText: 'Credits',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                       isDense: true,
                       prefixIcon: const Icon(Icons.numbers, color: Colors.deepPurple),
+                      errorStyle: const TextStyle(color: Colors.red),
                     ),
                     keyboardType: TextInputType.number,
                     autovalidateMode: AutovalidateMode.onUserInteraction,
                     onChanged: (value) {
-                      // Prevent negative input
                       if (value.startsWith('-')) return;
-                      subject.credits = int.tryParse(value) ?? 0;
+                      _subjects[index].credits = int.tryParse(value) ?? 0;
+                      _saveSubjects();
                     },
                     validator: (value) {
                       if (value == null || value.isEmpty) return null;
                       final numVal = int.tryParse(value);
-                      if (numVal != null && numVal < 0) return 'No negative values';
+                      if (numVal == null) return 'Enter a valid number';
+                      if (numVal < 0) return 'No negative values';
+                      if (numVal == 0) return 'Credits required';
                       return null;
                     },
                   ),
@@ -212,9 +299,17 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
               await showFeedbackOrAdminScreen(context);
             } else if (value == 'logout') {
               await FirebaseAuth.instance.signOut();
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const EmailAuthScreen()),
+                    (route) => false,
+              );
             } else if (value == 'manage_messages') {
               showManageMessagesDialog(context);
+            } else if (value == 'contact_us') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+              );
             }
           },
           itemBuilder: (context) => [
@@ -268,6 +363,16 @@ class _SgpaCalculatorScreenState extends State<SgpaCalculatorScreen> with Single
                   Icon(Icons.logout, color: Color(0xFF1976D2)),
                   SizedBox(width: 10),
                   Text('Logout'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'contact_us',
+              child: Row(
+                children: const [
+                  Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
+                  SizedBox(width: 10),
+                  Text('Contact Us'),
                 ],
               ),
             ),

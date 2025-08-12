@@ -12,6 +12,7 @@ import 'view_Logs.dart'; // Add this import
 import 'timeTable.dart';
 import 'homeScreen.dart';
 import 'authentications.dart';
+import 'contact_Us.dart'; // Import Contact Us screen
 
 class OptionsScreen extends StatelessWidget {
   const OptionsScreen({Key? key}) : super(key: key);
@@ -86,6 +87,11 @@ class OptionsScreen extends StatelessWidget {
             context,
             MaterialPageRoute(builder: (_) => const ViewLogsScreen()),
           );
+        } else if (value == 'contact_us') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+          );
         }
       },
       itemBuilder: (context) => [
@@ -139,6 +145,16 @@ class OptionsScreen extends StatelessWidget {
               Icon(Icons.logout, color: Color(0xFF1976D2)),
               SizedBox(width: 10),
               Text('Logout'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: 'contact_us',
+          child: Row(
+            children: const [
+              Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
+              SizedBox(width: 10),
+              Text('Contact Us'),
             ],
           ),
         ),

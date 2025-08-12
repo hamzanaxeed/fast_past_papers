@@ -30,15 +30,8 @@ class EmailAuthScreen extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Hero(
-                  tag: 'past_paper_icon',
-                  child: CircleAvatar(
-                    radius: 54,
-                    backgroundColor: Colors.deepPurple.withOpacity(0.18),
-                    child: Image.asset('assets/logo.jpg', width: 70, height: 70),
-                  ),
-                ),
-                const SizedBox(height: 18),
+                // Replace Hero + CircleAvatar with a clear logo image
+
                 Card(
                   elevation: 18,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -719,15 +712,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Hero(
-                  tag: 'past_paper_icon',
-                  child: CircleAvatar(
-                    radius: 54,
-                    backgroundColor: Colors.deepPurple.withOpacity(0.18),
-                    child: Image.asset('assets/logo.jpg', width: 70, height: 70),
-                  ),
-                ),
-                const SizedBox(height: 18),
+
                 Card(
                   elevation: 18,
                   margin: const EdgeInsets.symmetric(horizontal: 8),
@@ -842,7 +827,7 @@ class _EmailSignUpScreenState extends State<EmailSignUpScreen> {
                                     ],
                                   ),
                                 ),
-                              ),
+                            ),
                             ),
                           if (_info != null)
                             Padding(

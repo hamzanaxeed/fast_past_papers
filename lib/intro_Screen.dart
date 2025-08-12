@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fast_past_papers/main.dart';
 import 'log.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
+
 
 class into_Screen extends StatefulWidget {
   const into_Screen({super.key});
@@ -15,6 +18,92 @@ class _into_ScreenState extends State<into_Screen> {
   void initState() {
     super.initState();
     logUserEvent('Intro Screen Opened');
+  }
+  Future<void> _launchEmail() async {
+    await logUserEvent('Clicked Email', details: 'intro screen');
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: 'l230618@lhr.nu.edu.pk',
+      query: Uri.encodeFull('subject=Fast Past Papers Query'),
+    );
+    if (await canLaunchUrl(emailUri)) {
+      await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+    } else {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Email'),
+          content: const Text(
+            'Could not open your email app. Please copy the email address and send your query manually.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Clipboard.setData(
+                    const ClipboardData(text: 'l230618@lhr.nu.edu.pk'));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Email address copied to clipboard.')),
+                );
+              },
+              child: const Text('Copy Email'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _launchLinkedIn() async {
+    await logUserEvent('Clicked LinkedIn', details: 'intro screen');
+    const url = 'https://www.linkedin.com/in/hamza-naveed-3aa01b289?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3BshURbEmgS%2BylqPOif7kdjQ%3D%3D';
+    final uri = Uri.parse(url);
+
+    bool launched = false;
+    try {
+      launched = await launchUrl(uri, mode: LaunchMode.platformDefault);
+    } catch (_) {
+      // ignore
+    }
+    if (!launched) {
+      try {
+        launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        // ignore
+      }
+    }
+    if (!launched) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('LinkedIn'),
+          content: const Text(
+            'Could not open LinkedIn. Please copy the link and open it manually in your browser.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Clipboard.setData(const ClipboardData(text: url));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('LinkedIn URL copied to clipboard.')),
+                );
+              },
+              child: const Text('Copy Link'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -54,13 +143,79 @@ class _into_ScreenState extends State<into_Screen> {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  "Fast Past Papers is a smart and organized app that contains all past paper questions arranged topic-wise, removing the hassle of searching through entire papers.\n\n"
+                  "📚 Fast Past Papers\n"
+                      "A smart and organized app that contains all past paper questions arranged topic-wise, removing the hassle of searching through entire papers.\n\n"
+
+                      "🗂 Organized by Year\n"
                       "Questions are sorted in descending order by year, making it easier to focus on recent content first.\n\n"
+
+                      "📥 Offline Access\n"
                       "You can download past papers for offline use for easy access anytime.\n\n"
+
+                      "🗓 Timetable Feature\n"
+                      "View your timetable directly in the app and download it for offline reference.\n\n"
+
+                      "📊 CGPA/SGPA Calculator\n"
+                      "Easily calculate your CGPA/SGPA and set a target CGPA/SGPA to help you plan your studies more effectively.\n\n"
+
+                      "💬 Feedback & Contributions\n"
                       "If you want to contribute or have any queries, you can easily send feedback from within the app.\n\n"
+
+                      "👤 Account Features\n"
                       "By creating an account, you can contribute solutions, add questions, or submit feedback. Guest users can view content but cannot contribute or send feedback.\n\n"
-                      "If you're interested, you can also apply to become an editor and help manage or verify content.",
+
+                      "📝 Become an Editor\n"
+                      "If you're interested, you can also apply to become an editor and help manage or verify content.\n",
                   style: TextStyle(fontSize: 16, height: 1.5),
+                ),
+
+                const SizedBox(height: 10),
+                SelectableText.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(
+                        text: "If you want any detail information about the app, you can contact us via email at ",
+                        style: TextStyle(fontSize: 16, height: 1.5, color: Colors.black),
+                      ),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: GestureDetector(
+                          onTap: _launchEmail,
+                          child: Text(
+                            "l230618@lhr.nu.edu.pk",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.blue,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const TextSpan(
+                        text: ".\n",
+                        style: TextStyle(fontSize: 16, height: 1.5, color: Colors.black),
+                      ),
+                      const TextSpan(
+                        text: "LinkedIn: ",
+                        style: TextStyle(fontSize: 16, height: 1.5, color: Colors.black),
+                      ),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: GestureDetector(
+                          onTap: _launchLinkedIn,
+                          child: Text(
+                            "Hamza Naveed",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.blue,
+                              decoration: TextDecoration.underline,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 20),
                 buildCard(
@@ -77,9 +232,10 @@ class _into_ScreenState extends State<into_Screen> {
                   title: "Contributors",
                   children: const [
                     Text(
-                      "• Ayesha Noor (L23-0549)\n"
-                          "• Hamza Azam (L23-0945)\n"
-                          "• Aliha Wasif (L23-0921)",
+                      "• Ayesha Noor      (L23-0549)\n"
+                      "• Hamza Azam     (L23-0945)\n"
+                      "• Aliha Wasif         (L23-0921)\n"
+                      "• Maham Gull        (L23-0736)\n",
                       style: TextStyle(fontSize: 16),
                     ),
                   ],

@@ -12,14 +12,6 @@ Future<void> logUserEvent(String event, {String? details}) async {
     print('[DEBUG] logUserEvent called by: $email, event: $event, details: $details');
     if (email.toLowerCase().contains('admin')) return; // skip admin logs
 
-    // Only log essential events
-    final essentialEvents = [
-      'Login',
-      'Logout',
-      'Opened User Logs Screen',
-    ];
-    if (!essentialEvents.contains(event)) return;
-
     await Supabase.instance.client.from('log_table').insert({
       'Email': email,
       'Event': event.length > 24 ? event.substring(0, 24) : event,
