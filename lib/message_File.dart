@@ -21,7 +21,7 @@ Future<void> showStartupMessage(BuildContext context) async {
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
             child: SizedBox(
-              width: 400,
+              width: 1000,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -43,13 +43,21 @@ Future<void> showStartupMessage(BuildContext context) async {
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
-                        message,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.black87,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          minHeight: 60,
+                          maxHeight: 400, // allow large messages, but scroll if too big
                         ),
-                        textAlign: TextAlign.center,
+                        child: SingleChildScrollView(
+                          child: Text(
+                            message,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -175,7 +183,7 @@ class _ManageMessagesDialogState extends State<ManageMessagesDialog> {
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
         child: SizedBox(
-          width: 400,
+          width: 600,
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _error != null
@@ -201,16 +209,24 @@ class _ManageMessagesDialogState extends State<ManageMessagesDialog> {
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
-                            child: TextField(
-                              controller: _messageController,
-                              decoration: const InputDecoration(
-                                labelText: 'Message',
-                                border: OutlineInputBorder(),
-                                filled: true,
-                                fillColor: Colors.white,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minHeight: 60,
+                                maxHeight: 600, // allow large messages, but scroll if too big
                               ),
-                              minLines: 1,
-                              maxLines: 3,
+                              child: SingleChildScrollView(
+                                child: TextField(
+                                  controller: _messageController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Message',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                  ),
+                                  minLines: 1,
+                                  maxLines: null,
+                                ),
+                              ),
                             ),
                           ),
                         ),
