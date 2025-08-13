@@ -820,7 +820,18 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
 
   // --- 3-dot menu for admin and user actions (same as homeScreen) ---
   void _handleMenu(BuildContext context, String value, bool isAdmin) async {
+    final user = FirebaseAuth.instance.currentUser;
     if (value == 'feedback') {
+      if (user == null || user.isAnonymous) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Only logged-in users can share feedback.'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
       if (isAdmin) {
         showAdminFeedbackScreen(context);
       } else {

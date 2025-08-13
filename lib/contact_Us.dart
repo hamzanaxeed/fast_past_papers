@@ -102,7 +102,7 @@ class ContactUsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "📘 Fast Past Papers",
+              "📌 Fast Past Papers – About Us",
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
@@ -110,75 +110,81 @@ class ContactUsScreen extends StatelessWidget {
                 letterSpacing: 0.5,
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 18),
+            _sectionTitle("Who We Are"),
             const Text(
-              "📚 Fast Past Papers\n"
-                  "A smart and organized app that contains all past paper questions arranged topic-wise, removing the hassle of searching through entire papers.\n\n"
-                  "🗂 Organized by Year\n"
-                  "Questions are sorted in descending order by year, making it easier to focus on recent content first.\n\n"
-                  "📥 Offline Access\n"
-                  "You can download past papers for offline use for easy access anytime.\n\n"
-                  "🗓 Timetable Feature\n"
-                  "View your timetable directly in the app and download it for offline reference.\n\n"
-                  "📊 CGPA/SGPA Calculator\n"
-                  "Easily calculate your CGPA/SGPA and set a target CGPA/SGPA to help you plan your studies more effectively.\n\n"
-                  "💬 Feedback & Contributions\n"
-                  "If you want to contribute or have any queries, you can easily send feedback from within the app.\n\n"
-                  "👤 Account Features\n"
-                  "By creating an account, you can contribute solutions, add questions, or submit feedback. Guest users can view content but cannot contribute or send feedback.\n\n"
-                  "📝 Become an Editor\n"
-                  "If you're interested, you can also apply to become an editor and help manage or verify content.\n",
+              "Fast Past Papers is built for students. We understand the struggle of digging through dozens of past papers just to find the right question — so we decided to make it simple, fast, and smart.",
               style: TextStyle(fontSize: 16, height: 1.5),
             ),
-            const SizedBox(height: 10),
-            SelectableText.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(
-                    text: "For any queries, contact us via email at ",
-                    style: TextStyle(fontSize: 16, height: 1.5, color: Colors.black),
-                  ),
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: GestureDetector(
-                      onTap: () => _launchEmail(context),
-                      child: Text(
-                        "l230618@lhr.nu.edu.pk",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const TextSpan(
-                    text: ".\n",
-                    style: TextStyle(fontSize: 16, height: 1.5, color: Colors.black),
-                  ),
-                  const TextSpan(
-                    text: "LinkedIn: ",
-                    style: TextStyle(fontSize: 16, height: 1.5, color: Colors.black),
-                  ),
-                  WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: GestureDetector(
-                      onTap: () => _launchLinkedIn(context),
-                      child: Text(
-                        "Hamza Naveed",
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            const SizedBox(height: 18),
+            _sectionTitle("Our Mission"),
+            const Text(
+              "We aim to make exam preparation stress-free by providing:\n\n"
+              "• Topic-wise organized past paper questions 📚\n"
+              "• Recent-to-old sorting so you can focus on the latest trends 📅\n"
+              "• Offline access to your downloaded papers and timetable 📥",
+              style: TextStyle(fontSize: 16, height: 1.5),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
+            _sectionTitle("Why We Built This App"),
+            const Text(
+              "Studying should be efficient, not exhausting. With built-in CGPA/SGPA calculators, timetable downloads, and the ability to contribute questions, we give you all the tools you need in one place.",
+              style: TextStyle(fontSize: 16, height: 1.5),
+            ),
+            const SizedBox(height: 18),
+            _sectionTitle("Get Involved"),
+            const Text(
+              "We welcome contributions from students . You can:\n\n"
+              "• Add questions or solutions ✏️\n"
+              "• Share feedback 💬\n"
+              "• Apply to become an editor to help maintain quality content",
+              style: TextStyle(fontSize: 16, height: 1.5),
+            ),
+            const SizedBox(height: 18),
+            _sectionTitle("Contact Us"),
+            const SizedBox(height: 8),
+
+            Text(
+              "Have questions, suggestions ? Reach out to us!",
+              style: TextStyle(fontSize: 16, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Text("📧 Email: ", style: TextStyle(fontSize: 16)),
+                GestureDetector(
+                  onTap: () => _launchEmail(context),
+                  child: Text(
+                    "l230618@lhr.nu.edu.pk",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.blue,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                const Text("🔗 LinkedIn: ", style: TextStyle(fontSize: 16)),
+                GestureDetector(
+                  onTap: () => _launchLinkedIn(context),
+                  child: Text(
+                    "Hamza Naveed",
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: Colors.blue,
+                      decoration: TextDecoration.underline,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
             _buildCard(
               title: "Developer",
               children: const [
@@ -203,6 +209,18 @@ class ContactUsScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 19,
+        fontWeight: FontWeight.bold,
+        color: Colors.deepPurple,
+        letterSpacing: 0.2,
       ),
     );
   }
