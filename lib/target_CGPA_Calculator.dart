@@ -7,6 +7,7 @@ import 'options_Screen.dart';
 import 'authentications.dart';
 import 'editor_Handling.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'contact_Us.dart';
 
 class TargetCgpaCalculatorScreen extends StatefulWidget {
   const TargetCgpaCalculatorScreen({Key? key}) : super(key: key);
@@ -79,6 +80,11 @@ class _TargetCgpaCalculatorScreenState extends State<TargetCgpaCalculatorScreen>
               );
             } else if (value == 'manage_messages') {
               showManageMessagesDialog(context);
+            } else if (value == 'about_us') {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+              );
             }
           },
           itemBuilder: (context) => [
@@ -132,6 +138,16 @@ class _TargetCgpaCalculatorScreenState extends State<TargetCgpaCalculatorScreen>
                   Icon(Icons.logout, color: Color(0xFF1976D2)),
                   SizedBox(width: 10),
                   Text('Logout'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'about_us',
+              child: Row(
+                children: const [
+                  Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
+                  SizedBox(width: 10),
+                  Text('About Us'),
                 ],
               ),
             ),

@@ -7,7 +7,7 @@ class ContactUsScreen extends StatelessWidget {
   const ContactUsScreen({super.key});
 
   Future<void> _launchEmail(BuildContext context) async {
-    await logUserEvent('Clicked Email', details: 'contact us screen');
+    await logUserEvent('Clicked Email', details: 'About us screen');
     final Uri emailUri = Uri(
       scheme: 'mailto',
       path: 'l230618@lhr.nu.edu.pk',
@@ -45,7 +45,7 @@ class ContactUsScreen extends StatelessWidget {
   }
 
   Future<void> _launchLinkedIn(BuildContext context) async {
-    await logUserEvent('Clicked LinkedIn', details: 'contact us screen');
+    await logUserEvent('Clicked LinkedIn', details: 'About us screen');
     const url = 'https://www.linkedin.com/in/hamza-naveed-3aa01b289?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3BshURbEmgS%2BylqPOif7kdjQ%3D%3D';
     final uri = Uri.parse(url);
 
@@ -91,7 +91,7 @@ class ContactUsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Contact Us"),
+        title: const Text("About Us"),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
         elevation: 4,
@@ -240,4 +240,3 @@ class ContactUsScreen extends StatelessWidget {
     );
   }
 }
-

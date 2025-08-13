@@ -18,6 +18,7 @@ import 'dart:async';
 import 'image_Viewer.dart';
 import 'pdf_Viewer.dart';
 import 'login_Type.dart';
+import 'contact_Us.dart';
 
 class TimeTableScreen extends StatefulWidget {
   const TimeTableScreen({Key? key}) : super(key: key);
@@ -946,7 +947,16 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
                         icon: const Icon(Icons.more_vert, color: Colors.white),
                         color: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        onSelected: (value) => _handleMenu(context, value, admin),
+                        onSelected: (value) {
+                          if (value == 'about_us') {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+                            );
+                          } else {
+                            _handleMenu(context, value, admin);
+                          }
+                        },
                         itemBuilder: (context) => [
                           PopupMenuItem(
                             value: 'feedback',
@@ -1009,6 +1019,16 @@ class _TimeTableScreenState extends State<TimeTableScreen> {
                                 Icon(Icons.logout, color: Color(0xFF1976D2)),
                                 SizedBox(width: 10),
                                 Text('Logout'),
+                              ],
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'about_us',
+                            child: Row(
+                              children: const [
+                                Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
+                                SizedBox(width: 10),
+                                Text('About Us'),
                               ],
                             ),
                           ),

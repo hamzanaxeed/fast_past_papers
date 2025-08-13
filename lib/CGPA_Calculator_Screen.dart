@@ -323,7 +323,7 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
               // Navigate to manage editors screen
             } else if (value == 'logs') {
               // Navigate to view logs screen
-            } else if (value == 'contact_us') {
+            } else if (value == 'about_us') {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ContactUsScreen()),
@@ -385,12 +385,12 @@ class _CgpaCalculatorScreenState extends State<CgpaCalculatorScreen> with Single
               ),
             ),
             PopupMenuItem(
-              value: 'contact_us',
+              value: 'about_us',
               child: Row(
                 children: const [
                   Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
                   SizedBox(width: 10),
-                  Text('Contact Us'),
+                  Text('About Us'),
                 ],
               ),
             ),

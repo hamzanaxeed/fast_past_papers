@@ -16,6 +16,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:async';
 import 'editor_Handling.dart';
+import 'package:fast_past_papers/contact_Us.dart';
 
 class PastPaperHomeScreen extends StatefulWidget {
   const PastPaperHomeScreen({Key? key}) : super(key: key);
@@ -330,7 +331,16 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
                             icon: const Icon(Icons.more_vert, color: Colors.white),
                             color: Colors.white,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            onSelected: (value) => _handleMenu(context, value, canEdit, isAdmin),
+                            onSelected: (value) {
+                              if (value == 'about_us') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+                                );
+                              } else {
+                                _handleMenu(context, value, canEdit, isAdmin);
+                              }
+                            },
                             itemBuilder: (context) => [
                               if (isAdmin)
                                 PopupMenuItem(
@@ -404,6 +414,16 @@ class _PastPaperHomeScreenState extends State<PastPaperHomeScreen> {
                                     Icon(Icons.logout, color: Color(0xFF1976D2)),
                                     SizedBox(width: 10),
                                     Text('Logout'),
+                                  ],
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'about_us',
+                                child: Row(
+                                  children: const [
+                                    Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
+                                    SizedBox(width: 10),
+                                    Text('About Us'),
                                   ],
                                 ),
                               ),

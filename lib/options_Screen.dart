@@ -87,7 +87,7 @@ class OptionsScreen extends StatelessWidget {
             context,
             MaterialPageRoute(builder: (_) => const ViewLogsScreen()),
           );
-        } else if (value == 'contact_us') {
+        } else if (value == 'about_us') {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const ContactUsScreen()),
@@ -149,12 +149,12 @@ class OptionsScreen extends StatelessWidget {
           ),
         ),
         PopupMenuItem(
-          value: 'contact_us',
+          value: 'about_us',
           child: Row(
             children: const [
               Icon(Icons.contact_mail, color: Color(0xFF1976D2)),
               SizedBox(width: 10),
-              Text('Contact Us'),
+              Text('About us'),
             ],
           ),
         ),
